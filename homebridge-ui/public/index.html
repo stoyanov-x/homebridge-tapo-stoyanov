@@ -282,6 +282,11 @@
       color: #c91432;
     }
 
+    .device-status.manual {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
     .checkbox-wrapper {
       position: absolute;
       top: 16px;
@@ -404,16 +409,21 @@
 
     <!-- Step 2: Device Discovery (Initially Hidden) -->
     <div id="step-discovery" class="section hidden">
-      <h2 class="section-title">
-        📱 Available Devices
-      </h2>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h2 class="section-title" style="margin: 0;">
+          📱 Available Devices
+        </h2>
+        <button class="btn btn-secondary" onclick="startOver()" style="padding: 6px 12px; font-size: 12px;">
+          ↩️ Start Over
+        </button>
+      </div>
       <p class="section-description">
         Select which devices you want to add to HomeKit
       </p>
 
       <div id="discovery-loading" class="loading-container">
         <div class="loading-spinner"></div>
-        <p>Scanning your network for Tapo devices...</p>
+        <p id="discovery-status">Scanning your network for Tapo devices...</p>
       </div>
 
       <div id="discovery-error" class="alert alert-error hidden"></div>
@@ -428,7 +438,48 @@
         <p class="empty-state-description">
           Make sure your Tapo devices are powered on and connected to the same network as this Homebridge instance.
         </p>
+        <p class="empty-state-description" style="margin-top: 8px;">
+          Or add a device manually below.
+        </p>
       </div>
+    </div>
+
+    <!-- Manual Device Entry -->
+    <div id="step-manual" class="section hidden">
+      <h2 class="section-title">
+        ➕ Add Device Manually
+      </h2>
+      <p class="section-description">
+        If a device wasn't discovered, enter its IP address
+      </p>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="manual-ip">IP Address</label>
+          <input 
+            type="text" 
+            id="manual-ip" 
+            placeholder="192.168.x.x"
+          />
+        </div>
+        <div class="form-group">
+          <label for="manual-name">Display Name (optional)</label>
+          <input 
+            type="text" 
+            id="manual-name" 
+            placeholder="My Tapo Light"
+          />
+        </div>
+      </div>
+
+      <button 
+        id="btn-add-manual" 
+        class="btn btn-secondary"
+        onclick="addManualDevice()"
+        style="margin-top: 8px;"
+      >
+        Add Device
+      </button>
     </div>
 
     <!-- Step 3: Settings -->
@@ -471,6 +522,14 @@
     
     let discoveredDevices = [];
     let selectedDeviceIds = new Set();
+
+    // Listen for discovery progress events
+    homebridge.addEventListener('discovery_progress', (event) => {
+      const statusEl = document.getElementById('discovery-status');
+      if (statusEl && event.data?.message) {
+        statusEl.textContent = event.data.message;
+      }
+    });
 
     // Device type emoji mapping
     const deviceEmojis = {
@@ -533,9 +592,12 @@
           renderDevices();
           document.getElementById('discovery-loading').classList.add('hidden');
           document.getElementById('device-list').classList.remove('hidden');
-          document.getElementById('step-settings').classList.remove('hidden');
-          document.getElementById('save-section').classList.remove('hidden');
         }
+
+        // Always show manual entry, settings, and save after discovery
+        document.getElementById('step-manual').classList.remove('hidden');
+        document.getElementById('step-settings').classList.remove('hidden');
+        document.getElementById('save-section').classList.remove('hidden');
 
         btnDiscover.innerHTML = 'Re-discover Devices';
         btnDiscover.disabled = false;
@@ -570,7 +632,9 @@
       }
 
       const emoji = getDeviceEmoji(device.model);
-      const status = device.online !== false ? 'online' : 'offline';
+      const status = device.manual ? 'manual' : (device.online !== false ? 'online' : 'offline');
+      const statusText = device.manual ? 'MANUAL' : (status === 'online' ? 'ONLINE' : 'OFFLINE');
+      const statusIcon = device.manual ? '✎' : (status === 'online' ? '●' : '○');
 
       card.innerHTML = `
         <div class="checkbox-wrapper">
@@ -594,7 +658,7 @@
           </div>
           <div class="device-meta-row">
             <span class="device-status ${status}">
-              ${status === 'online' ? '●' : '○'} ${status.toUpperCase()}
+              ${statusIcon} ${statusText}
             </span>
           </div>
         </div>
@@ -689,6 +753,90 @@
       errorEl.classList.add('hidden');
     }
 
+    function startOver() {
+      // Reset state
+      discoveredDevices = [];
+      selectedDeviceIds = new Set();
+
+      // Hide all steps except credentials
+      document.getElementById('step-discovery').classList.add('hidden');
+      document.getElementById('step-manual').classList.add('hidden');
+      document.getElementById('step-settings').classList.add('hidden');
+      document.getElementById('save-section').classList.add('hidden');
+
+      // Reset discovery section state
+      document.getElementById('discovery-loading').classList.add('hidden');
+      document.getElementById('device-list').classList.add('hidden');
+      document.getElementById('no-devices').classList.add('hidden');
+      hideError('discovery-error');
+
+      // Reset button
+      const btnDiscover = document.getElementById('btn-discover');
+      btnDiscover.innerHTML = 'Discover Devices';
+      btnDiscover.disabled = false;
+
+      // Clear form inputs
+      document.getElementById('email').value = '';
+      document.getElementById('email').placeholder = 'your.email@example.com';
+      document.getElementById('password').value = '';
+      document.getElementById('password').placeholder = 'Enter your password';
+      document.getElementById('manual-ip').value = '';
+      document.getElementById('manual-name').value = '';
+    }
+
+    async function addManualDevice() {
+      const ip = document.getElementById('manual-ip').value.trim();
+      const name = document.getElementById('manual-name').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!ip) {
+        alert('Please enter an IP address');
+        return;
+      }
+
+      // Validate IP format
+      const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+      if (!ipRegex.test(ip)) {
+        alert('Please enter a valid IP address (e.g., 192.168.1.100)');
+        return;
+      }
+
+      // Check if already added
+      if (discoveredDevices.some(d => d.ip === ip)) {
+        alert('This device is already in the list');
+        return;
+      }
+
+      const btn = document.getElementById('btn-add-manual');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading-spinner"></span> Checking...';
+
+      try {
+        const response = await homebridge.request('/check-device', { email, password, ip, name });
+
+        if (response.success && response.device) {
+          discoveredDevices.push(response.device);
+          selectedDeviceIds.add(response.device.mac);
+          renderDevices();
+          document.getElementById('device-list').classList.remove('hidden');
+          document.getElementById('no-devices').classList.add('hidden');
+
+          // Clear manual inputs
+          document.getElementById('manual-ip').value = '';
+          document.getElementById('manual-name').value = '';
+
+          alert(`✅ Device added: ${response.device.name} (${response.device.online ? 'online' : 'will be verified at runtime'})`);
+        }
+      } catch (error) {
+        console.error('Add manual device error:', error);
+        alert('Failed to add device: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Add Device';
+      }
+    }
+
     // Load existing config if available
     async function loadExistingConfig() {
       try {
@@ -696,15 +844,33 @@
         if (config && config.length > 0) {
           const pluginConfig = config[0];
           
-          // Note: We can't decrypt the credentials in the UI for security reasons
-          // Just show that credentials exist
+          // If there are existing encrypted credentials, show a helpful message
           if (pluginConfig.email && pluginConfig.isEncrypted) {
-            document.getElementById('email').placeholder = '••••••••••••••••';
-            document.getElementById('password').placeholder = '••••••••••••••••';
+            document.getElementById('email').placeholder = 'Enter to update credentials';
+            document.getElementById('password').placeholder = 'Enter to update credentials';
           }
 
           if (pluginConfig.pollingInterval) {
             document.getElementById('polling-interval').value = pluginConfig.pollingInterval;
+          }
+
+          // If there are existing devices, show them
+          if (pluginConfig.devices && pluginConfig.devices.length > 0) {
+            discoveredDevices = pluginConfig.devices.map(d => ({
+              ...d,
+              nickname: d.name,
+              online: true, // Assume online for existing devices
+            }));
+            selectedDeviceIds = new Set(discoveredDevices.map(d => d.mac));
+            
+            // Show device list directly
+            renderDevices();
+            document.getElementById('step-discovery').classList.remove('hidden');
+            document.getElementById('device-list').classList.remove('hidden');
+            document.getElementById('discovery-loading').classList.add('hidden');
+            document.getElementById('step-manual').classList.remove('hidden');
+            document.getElementById('step-settings').classList.remove('hidden');
+            document.getElementById('save-section').classList.remove('hidden');
           }
         }
       } catch (error) {
