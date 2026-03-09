@@ -4,7 +4,7 @@
  */
 
 const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
-const { discoverDevices, checkDevice, testConnection, verifyDevices, encryptCredential, isEncryptionAvailable } = require('../dist/utils');
+const { discoverDevices, checkDevice, testConnection, verifyDevices, encryptCredential, decryptCredential, isEncryptionAvailable } = require('../dist/utils');
 
 class PluginUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -102,10 +102,18 @@ class PluginUiServer extends HomebridgePluginUiServer {
     // Handle testing connection to a device with detailed error feedback
     this.onRequest('/test-connection', async (payload) => {
       try {
-        const { email, password, ip } = payload || {};
+        const { ip } = payload || {};
+        let { email, password } = payload || {};
 
+        // If credentials not provided, try to use stored credentials
         if (!email || !password) {
-          throw new RequestError('Email and password are required', { status: 400 });
+          const storedCreds = await this.getStoredCredentials();
+          if (storedCreds) {
+            email = storedCreds.email;
+            password = storedCreds.password;
+          } else {
+            throw new RequestError('No credentials provided and no stored credentials available', { status: 400 });
+          }
         }
 
         if (!ip) {
@@ -130,10 +138,18 @@ class PluginUiServer extends HomebridgePluginUiServer {
     // Handle verifying multiple devices at once
     this.onRequest('/verify-devices', async (payload) => {
       try {
-        const { email, password, devices } = payload || {};
+        const { devices } = payload || {};
+        let { email, password } = payload || {};
 
+        // If credentials not provided, try to use stored credentials
         if (!email || !password) {
-          throw new RequestError('Email and password are required', { status: 400 });
+          const storedCreds = await this.getStoredCredentials();
+          if (storedCreds) {
+            email = storedCreds.email;
+            password = storedCreds.password;
+          } else {
+            throw new RequestError('No credentials provided and no stored credentials available', { status: 400 });
+          }
         }
 
         if (!devices || !Array.isArray(devices) || devices.length === 0) {
@@ -185,6 +201,43 @@ class PluginUiServer extends HomebridgePluginUiServer {
 
     // Ready
     this.ready();
+  }
+
+  /**
+   * Get decrypted credentials from stored plugin config
+   * Returns null if no stored credentials are available
+   */
+  async getStoredCredentials() {
+    try {
+      const pluginConfig = await this.getPluginConfig();
+      if (!pluginConfig || pluginConfig.length === 0) {
+        return null;
+      }
+      
+      const config = pluginConfig[0];
+      if (!config.email || !config.password) {
+        return null;
+      }
+      
+      // If credentials are encrypted, decrypt them
+      if (config.isEncrypted) {
+        const email = decryptCredential(config.email, this.homebridgeStoragePath);
+        const password = decryptCredential(config.password, this.homebridgeStoragePath);
+        
+        if (!email || !password) {
+          console.warn('[Tapo] Failed to decrypt stored credentials');
+          return null;
+        }
+        
+        return { email, password };
+      }
+      
+      // Return plaintext credentials
+      return { email: config.email, password: config.password };
+    } catch (error) {
+      console.warn('[Tapo] Error getting stored credentials:', error.message);
+      return null;
+    }
   }
 }
 

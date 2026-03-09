@@ -896,18 +896,9 @@
     }
 
     async function testDeviceConnection(mac, ip) {
-      // Use stored credentials (input fields are hidden after discovery)
+      // Use stored credentials or fall back to input fields (may be empty if using server-stored creds)
       let email = storedCredentials.email || document.getElementById('email').value.trim();
       let password = storedCredentials.password || document.getElementById('password').value;
-      
-      if (!email || !password) {
-        // Show credentials section to get credentials
-        document.getElementById('step-credentials').classList.remove('hidden');
-        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
-        alert('Please enter your TP-Link credentials first, then try again.');
-        document.getElementById('email').focus();
-        return;
-      }
       
       const statusEl = document.getElementById(`status-${mac}`);
       const btnEl = document.getElementById(`btn-test-${mac}`);
@@ -919,7 +910,14 @@
       btnEl.textContent = '...';
       
       try {
-        const result = await homebridge.request('/test-connection', { email, password, ip });
+        // Try to test - server will use stored credentials if email/password not provided
+        const payload = { ip };
+        if (email && password) {
+          payload.email = email;
+          payload.password = password;
+        }
+        
+        const result = await homebridge.request('/test-connection', payload);
         
         // Update device in our list
         const device = discoveredDevices.find(d => d.mac === mac);
@@ -948,7 +946,17 @@
       } catch (error) {
         statusEl.className = 'device-status error';
         statusEl.innerHTML = '! ERROR';
-        alert(`Test failed: ${error.message}`);
+        
+        // Check if error is about missing credentials
+        if (error.message && error.message.includes('credentials')) {
+          // Show credentials section to get credentials
+          document.getElementById('step-credentials').classList.remove('hidden');
+          document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+          alert('Please enter your TP-Link credentials to test devices.');
+          document.getElementById('email').focus();
+        } else {
+          alert(`Test failed: ${error.message}`);
+        }
       } finally {
         const btnElFinal = document.getElementById(`btn-test-${mac}`);
         if (btnElFinal) {
@@ -1097,7 +1105,8 @@
     async function addManualDevice() {
       const ip = document.getElementById('manual-ip').value.trim();
       const name = document.getElementById('manual-name').value.trim();
-      const { email, password } = storedCredentials;
+      let email = storedCredentials.email || document.getElementById('email').value.trim();
+      let password = storedCredentials.password || document.getElementById('password').value;
 
       if (!ip) {
         alert('Please enter an IP address');
@@ -1124,6 +1133,11 @@
         alert('Please enter your TP-Link credentials first, then try again.');
         document.getElementById('email').focus();
         return;
+      }
+
+      // Store credentials if they came from input fields (for subsequent operations)
+      if (!storedCredentials.email || !storedCredentials.password) {
+        storedCredentials = { email, password };
       }
 
       const btn = document.getElementById('btn-add-manual');
@@ -1219,11 +1233,11 @@
               ...d,
               nickname: d.name,
               online: true, // Assume online for existing devices
-              connectionStatus: null, // Will be verified when user enters credentials
+              connectionStatus: null, // Will be verified when user clicks Test/Verify
             }));
             selectedDeviceIds = new Set(discoveredDevices.map(d => d.mac));
             
-            // Hide credentials, show device list directly
+            // Hide credentials section - server will use stored credentials for Test/Verify
             document.getElementById('step-credentials').classList.add('hidden');
             renderDevices();
             document.getElementById('step-discovery').classList.remove('hidden');
@@ -1241,17 +1255,9 @@
 
     // Verify all devices at once
     async function verifyAllDevices() {
+      // Use stored credentials or fall back to input fields (may be empty if using server-stored creds)
       let email = storedCredentials.email || document.getElementById('email').value.trim();
       let password = storedCredentials.password || document.getElementById('password').value;
-      
-      if (!email || !password) {
-        // Show credentials section to get credentials
-        document.getElementById('step-credentials').classList.remove('hidden');
-        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
-        alert('Please enter your TP-Link credentials first, then try again.');
-        document.getElementById('email').focus();
-        return;
-      }
       
       if (discoveredDevices.length === 0) {
         alert('No devices to verify');
@@ -1271,11 +1277,14 @@
           mac: d.mac,
         }));
         
-        const response = await homebridge.request('/verify-devices', {
-          email,
-          password,
-          devices: devicesToVerify,
-        });
+        // Build payload - server will use stored credentials if email/password not provided
+        const payload = { devices: devicesToVerify };
+        if (email && password) {
+          payload.email = email;
+          payload.password = password;
+        }
+        
+        const response = await homebridge.request('/verify-devices', payload);
         
         if (response.success && response.results) {
           // Update each device with its verification result
@@ -1305,7 +1314,17 @@
         }
       } catch (error) {
         console.error('Verify devices error:', error);
-        alert('Failed to verify devices: ' + error.message);
+        
+        // Check if error is about missing credentials
+        if (error.message && error.message.includes('credentials')) {
+          // Show credentials section to get credentials
+          document.getElementById('step-credentials').classList.remove('hidden');
+          document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+          alert('Please enter your TP-Link credentials to verify devices.');
+          document.getElementById('email').focus();
+        } else {
+          alert('Failed to verify devices: ' + error.message);
+        }
         
         // Reset testing status
         discoveredDevices.forEach(device => {
