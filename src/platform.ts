@@ -49,7 +49,8 @@ export class TapoPlatform implements DynamicPlatformPlugin {
     
     // Decrypt credentials if encrypted
     try {
-      this.credentials = getDecryptedCredentials(this.config);
+      const storagePath = this.api.user.storagePath();
+      this.credentials = getDecryptedCredentials(this.config, storagePath);
       this.log.debug('Credentials loaded successfully');
     } catch (error) {
       this.log.error('Failed to decrypt credentials:', error);

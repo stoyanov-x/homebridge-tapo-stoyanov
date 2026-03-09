@@ -3,11 +3,17 @@
  */
 
 import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
 import { TapoClient } from './tapoClient';
 import { TapoCredentials, DiscoveredDevice } from './types';
 import {
   ENCRYPTION_ALGORITHM,
-  ENCRYPTION_KEY,
+  ENCRYPTION_KEY_LENGTH,
+  ENCRYPTION_IV_LENGTH,
+  PBKDF2_ITERATIONS,
+  PBKDF2_DIGEST,
+  DERIVATION_SALT,
   DEFAULT_FALLBACK_SUBNETS,
   NETWORK_SCAN_RANGE,
   NETWORK_SCAN_BATCH_SIZE,
@@ -16,62 +22,133 @@ import {
 } from './constants';
 
 /**
- * Encrypt a credential string
+ * Read Homebridge bridge credentials from config.json
+ * These are used to derive a unique encryption key per installation
  */
-export function encryptCredential(value: string): string {
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-  const iv = crypto.randomBytes(16);
+function getBridgeCredentials(storagePath: string): { username: string; pin: string } | null {
+  try {
+    const configPath = path.join(storagePath, 'config.json');
+    if (!fs.existsSync(configPath)) {
+      return null;
+    }
+
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const bridge = config?.bridge;
+
+    if (!bridge?.username || !bridge?.pin) {
+      return null;
+    }
+
+    return {
+      username: bridge.username,
+      pin: bridge.pin,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derive encryption key from bridge credentials using PBKDF2
+ */
+function deriveKey(credentials: { username: string; pin: string }): Buffer {
+  const password = `${credentials.username}:${credentials.pin}`;
+  return crypto.pbkdf2Sync(
+    password,
+    DERIVATION_SALT,
+    PBKDF2_ITERATIONS,
+    ENCRYPTION_KEY_LENGTH,
+    PBKDF2_DIGEST,
+  );
+}
+
+/**
+ * Encrypt a credential string
+ * Returns null if encryption is unavailable (bridge credentials not found)
+ */
+export function encryptCredential(value: string, storagePath: string): string | null {
+  const credentials = getBridgeCredentials(storagePath);
+  if (!credentials) {
+    return null;
+  }
+
+  const key = deriveKey(credentials);
+  const iv = crypto.randomBytes(ENCRYPTION_IV_LENGTH);
   const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
   
-  let encrypted = cipher.update(value, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
+  let encrypted = cipher.update(value, 'utf8');
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
   
   const authTag = cipher.getAuthTag();
   
-  // Combine IV, auth tag, and encrypted data
-  const combined = iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+  // Combine IV, auth tag, and encrypted data (base64 for cleaner storage)
+  const combined = iv.toString('base64') + ':' + authTag.toString('base64') + ':' + encrypted.toString('base64');
   return 'encrypted:' + combined;
 }
 
 /**
  * Decrypt a credential string
+ * Returns null if decryption fails
  */
-export function decryptCredential(encryptedValue: string): string {
+export function decryptCredential(encryptedValue: string, storagePath: string): string | null {
   if (!encryptedValue.startsWith('encrypted:')) {
-    // Not encrypted, return as-is (backward compatibility, though not needed per requirements)
+    // Not encrypted, return as-is
     return encryptedValue;
   }
 
-  const value = encryptedValue.substring('encrypted:'.length);
-  const parts = value.split(':');
-  
-  if (parts.length !== 3) {
-    throw new Error('Invalid encrypted credential format');
+  const credentials = getBridgeCredentials(storagePath);
+  if (!credentials) {
+    return null;
   }
 
-  const iv = Buffer.from(parts[0], 'hex');
-  const authTag = Buffer.from(parts[1], 'hex');
-  const encrypted = parts[2];
+  try {
+    const value = encryptedValue.substring('encrypted:'.length);
+    const parts = value.split(':');
+    
+    if (parts.length !== 3) {
+      return null;
+    }
 
-  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
-  decipher.setAuthTag(authTag);
+    const iv = Buffer.from(parts[0], 'base64');
+    const authTag = Buffer.from(parts[1], 'base64');
+    const encrypted = Buffer.from(parts[2], 'base64');
 
-  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
+    const key = deriveKey(credentials);
+    const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+    decipher.setAuthTag(authTag);
 
-  return decrypted;
+    let decrypted = decipher.update(encrypted);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+
+    return decrypted.toString('utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if encryption is available (bridge credentials exist)
+ */
+export function isEncryptionAvailable(storagePath: string): boolean {
+  return getBridgeCredentials(storagePath) !== null;
 }
 
 /**
  * Get decrypted credentials from config
  */
-export function getDecryptedCredentials(config: { email: string; password: string; isEncrypted?: boolean }): TapoCredentials {
+export function getDecryptedCredentials(
+  config: { email: string; password: string; isEncrypted?: boolean },
+  storagePath: string,
+): TapoCredentials {
   if (config.isEncrypted) {
-    return {
-      email: decryptCredential(config.email),
-      password: decryptCredential(config.password),
-    };
+    const email = decryptCredential(config.email, storagePath);
+    const password = decryptCredential(config.password, storagePath);
+    
+    if (!email || !password) {
+      throw new Error('Failed to decrypt credentials - bridge credentials may have changed');
+    }
+    
+    return { email, password };
   }
   return {
     email: config.email,

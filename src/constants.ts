@@ -21,9 +21,13 @@ export const DEFAULT_SATURATION = 0; // percent
 // Timing constants
 export const COLOR_UPDATE_BATCH_DELAY = 100; // milliseconds
 
-// Encryption constants
+// Encryption constants (key derived from bridge credentials)
 export const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
-export const ENCRYPTION_KEY = 'tapo-stoyanov-plugin-encryption-key-2026-v1';
+export const ENCRYPTION_KEY_LENGTH = 32; // 256 bits
+export const ENCRYPTION_IV_LENGTH = 16; // 128 bits for GCM
+export const PBKDF2_ITERATIONS = 100000;
+export const PBKDF2_DIGEST = 'sha256';
+export const DERIVATION_SALT = 'tapo-stoyanov-homebridge-v1';
 
 // Network discovery constants
 export const DEFAULT_FALLBACK_SUBNETS = ['192.168.1', '192.168.0', '10.0.0'];

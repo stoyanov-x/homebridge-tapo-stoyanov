@@ -4,7 +4,7 @@
  */
 
 const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
-const { discoverDevices, checkDevice, encryptCredential } = require('../dist/utils');
+const { discoverDevices, checkDevice, encryptCredential, isEncryptionAvailable } = require('../dist/utils');
 
 class PluginUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -108,9 +108,21 @@ class PluginUiServer extends HomebridgePluginUiServer {
           throw new RequestError('Email and password are required', { status: 400 });
         }
 
+        const storagePath = this.homebridgeStoragePath;
+        if (!isEncryptionAvailable(storagePath)) {
+          throw new RequestError('Encryption unavailable - bridge credentials not found', { status: 500 });
+        }
+
+        const encryptedEmail = encryptCredential(email, storagePath);
+        const encryptedPassword = encryptCredential(password, storagePath);
+
+        if (!encryptedEmail || !encryptedPassword) {
+          throw new RequestError('Encryption failed', { status: 500 });
+        }
+
         return {
-          email: encryptCredential(email),
-          password: encryptCredential(password),
+          email: encryptedEmail,
+          password: encryptedPassword,
         };
       } catch (error) {
         console.error('Encryption error:', error);
