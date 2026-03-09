@@ -44,14 +44,6 @@ export interface TapoDeviceInfo {
   auto_biorhythm_light_enable?: boolean;
 }
 
-export interface TapoLightState {
-  on: boolean;
-  brightness: number;
-  hue?: number;
-  saturation?: number;
-  colorTemperature?: number;
-}
-
 export interface TapoResponse<T = any> {
   error_code: number;
   result?: T;
