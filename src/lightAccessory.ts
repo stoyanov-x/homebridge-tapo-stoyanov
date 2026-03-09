@@ -37,11 +37,8 @@ export class TapoLightAccessory {
     private readonly config: TapoDeviceConfig,
     private readonly log: Logger,
   ) {
-    // Initialize the Tapo client
-    this.client = new TapoClient(config.ip, {
-      email: this.platform.config.email,
-      password: this.platform.config.password,
-    });
+    // Initialize the Tapo client with decrypted credentials
+    this.client = new TapoClient(config.ip, this.platform.credentials);
 
     // Set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!

@@ -5,9 +5,12 @@ A Homebridge plugin for controlling TP-Link Tapo smart devices that are not Matt
 ## Features
 
 - **Full HomeKit Integration**: Control your Tapo devices through the Home app, Siri, and automation
+- **Custom Configuration UI**: Easy-to-use web interface for device discovery and setup
+- **Automatic Device Discovery**: Scan your network to find all Tapo devices
+- **Encrypted Credentials**: Secure storage of your TP-Link account credentials
+- **Device Selection**: Choose which devices to expose to HomeKit with visual device cards
 - **Tapo L430C Support**: RGB color bulbs with full brightness, color, and color temperature control
 - **KLAP Protocol**: Uses the latest KLAP authentication protocol for secure communication
-- **Automatic Discovery**: Configure devices by IP address
 - **Status Polling**: Regular updates to keep HomeKit in sync with physical device state
 
 ## Supported Devices
@@ -36,7 +39,28 @@ npm install -g homebridge-tapo-stoyanov
 
 ## Configuration
 
-Add the platform to your Homebridge `config.json`:
+### Using the Custom UI (Recommended)
+
+The plugin includes a custom configuration interface that makes setup easy:
+
+1. **Install the plugin** via Homebridge Config UI X
+2. **Click "Settings"** on the plugin card
+3. **Enter your TP-Link credentials** (email and password)
+4. **Click "Discover Devices"** - the plugin will scan your network
+5. **Select devices** you want to add by clicking on their cards
+6. **Adjust settings** like polling interval if needed
+7. **Click "Save Configuration"** - Homebridge will restart automatically
+
+**Features of the Custom UI:**
+- 🔍 Automatic network scanning for Tapo devices
+- 💾 Encrypted credential storage (no plaintext passwords)
+- 📱 Visual device cards with emojis and status indicators
+- ⚡ Real-time device discovery with loading states
+- 🎨 Modern, responsive design
+
+### Manual Configuration
+
+If you prefer to edit the config file directly, add this to your Homebridge `config.json`:
 
 ```json
 {
@@ -70,10 +94,13 @@ Add the platform to your Homebridge `config.json`:
 |-------|----------|-------------|
 | `platform` | Yes | Must be `TapoStoyanov` |
 | `name` | No | Display name for the platform (default: "Tapo Platform") |
-| `email` | Yes | Your TP-Link/Tapo account email |
-| `password` | Yes | Your TP-Link/Tapo account password |
+| `email` | Yes | Your TP-Link/Tapo account email (will be encrypted when using custom UI) |
+| `password` | Yes | Your TP-Link/Tapo account password (will be encrypted when using custom UI) |
+| `isEncrypted` | No | Indicates if credentials are encrypted (automatically set by custom UI) |
 | `pollingInterval` | No | How often to poll devices for updates in seconds (default: 30, range: 10-300) |
 | `devices` | Yes | Array of device configurations |
+
+**Note:** When using the custom UI, credentials are automatically encrypted using AES-256-GCM encryption for secure storage.
 
 ### Device Configuration
 
@@ -82,6 +109,8 @@ Add the platform to your Homebridge `config.json`:
 | `name` | Yes | Friendly name for the device in HomeKit |
 | `ip` | Yes | Local IP address of the device |
 | `type` | Yes | Device type (currently only `light` is supported) |
+| `mac` | No | Device MAC address (automatically populated by discovery) |
+| `model` | No | Device model (automatically populated by discovery) |
 
 ## How It Works
 
@@ -105,7 +134,7 @@ The plugin implements the KLAP (Key-based Local Authentication Protocol):
 Before setting up the Homebridge plugin, you can test if your Tapo device is compatible:
 
 ```bash
-./research/test_device.sh
+research/test_device.sh
 ```
 
 The script will prompt you for your device IP, email, and password, then run comprehensive tests. See [research/README.md](research/README.md) for details.

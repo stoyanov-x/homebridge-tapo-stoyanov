@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tapo Plugin Configuration</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f7;
+    }
+
+    .config-container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      margin: 0 0 10px 0;
+      color: #1d1d1f;
+    }
+
+    .header p {
+      color: #86868b;
+      font-size: 16px;
+      margin: 0;
+    }
+
+    .section {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 0 0 16px 0;
+      color: #1d1d1f;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-description {
+      color: #86868b;
+      font-size: 14px;
+      margin: -8px 0 16px 0;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 6px;
+      color: #1d1d1f;
+      font-size: 14px;
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d2d2d7;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #007aff;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      background: #007aff;
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #0051d5;
+    }
+
+    .btn-primary:disabled {
+      background: #d2d2d7;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #f5f5f7;
+      color: #1d1d1f;
+    }
+
+    .btn-secondary:hover {
+      background: #e5e5e7;
+    }
+
+    .btn-block {
+      width: 100%;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-container {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .loading-container .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e5e5e7;
+      border-top-color: #007aff;
+      margin-bottom: 16px;
+    }
+
+    .alert {
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      font-size: 14px;
+    }
+
+    .alert-error {
+      background: #ffe5e5;
+      color: #c91432;
+      border: 1px solid #ffcccc;
+    }
+
+    .alert-success {
+      background: #e5f8e5;
+      color: #28a745;
+      border: 1px solid #cceecc;
+    }
+
+    .alert-info {
+      background: #e5f3ff;
+      color: #0051d5;
+      border: 1px solid #cce5ff;
+    }
+
+    .device-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .device-card {
+      border: 2px solid #e5e5e7;
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .device-card:hover {
+      border-color: #d2d2d7;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .device-card.selected {
+      border-color: #007aff;
+      background: #f0f7ff;
+    }
+
+    .device-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .device-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+    }
+
+    .device-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .device-name {
+      font-weight: 600;
+      font-size: 16px;
+      color: #1d1d1f;
+      margin: 0 0 4px 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .device-model {
+      font-size: 12px;
+      color: #86868b;
+      margin: 0;
+    }
+
+    .device-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+      color: #86868b;
+    }
+
+    .device-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .device-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .device-status.online {
+      background: #e5f8e5;
+      color: #28a745;
+    }
+
+    .device-status.offline {
+      background: #ffe5e5;
+      color: #c91432;
+    }
+
+    .checkbox-wrapper {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+    }
+
+    .checkbox-wrapper input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #86868b;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1d1d1f;
+      margin: 0 0 8px 0;
+    }
+
+    .empty-state-description {
+      font-size: 14px;
+      margin: 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      background: #007aff;
+      color: white;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e5e5e7;
+    }
+
+    .settings-row:last-child {
+      border-bottom: none;
+    }
+
+    .settings-label {
+      font-weight: 500;
+      color: #1d1d1f;
+    }
+
+    .settings-description {
+      font-size: 13px;
+      color: #86868b;
+      margin-top: 4px;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="config-container">
+    <div class="header">
+      <h1>💡 Tapo Smart Home</h1>
+      <p>Configure your Tapo devices for HomeKit integration</p>
+    </div>
+
+    <!-- Step 1: Credentials -->
+    <div id="step-credentials" class="section">
+      <h2 class="section-title">
+        🔐 TP-Link Account
+      </h2>
+      <p class="section-description">
+        Enter your TP-Link/Tapo account credentials to discover devices
+      </p>
+
+      <div id="credentials-error" class="alert alert-error hidden"></div>
+
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input 
+          type="email" 
+          id="email" 
+          placeholder="your.email@example.com"
+          autocomplete="email"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input 
+          type="password" 
+          id="password" 
+          placeholder="Enter your password"
+          autocomplete="current-password"
+        />
+      </div>
+
+      <button 
+        id="btn-discover" 
+        class="btn btn-primary btn-block"
+        onclick="discoverDevices()"
+      >
+        Discover Devices
+      </button>
+    </div>
+
+    <!-- Step 2: Device Discovery (Initially Hidden) -->
+    <div id="step-discovery" class="section hidden">
+      <h2 class="section-title">
+        📱 Available Devices
+      </h2>
+      <p class="section-description">
+        Select which devices you want to add to HomeKit
+      </p>
+
+      <div id="discovery-loading" class="loading-container">
+        <div class="loading-spinner"></div>
+        <p>Scanning your network for Tapo devices...</p>
+      </div>
+
+      <div id="discovery-error" class="alert alert-error hidden"></div>
+
+      <div id="device-list" class="hidden">
+        <div class="device-grid" id="devices-grid"></div>
+      </div>
+
+      <div id="no-devices" class="empty-state hidden">
+        <div class="empty-state-icon">🔍</div>
+        <h3 class="empty-state-title">No Devices Found</h3>
+        <p class="empty-state-description">
+          Make sure your Tapo devices are powered on and connected to the same network as this Homebridge instance.
+        </p>
+      </div>
+    </div>
+
+    <!-- Step 3: Settings -->
+    <div id="step-settings" class="section hidden">
+      <h2 class="section-title">
+        ⚙️ Advanced Settings
+      </h2>
+
+      <div class="settings-row">
+        <div>
+          <div class="settings-label">Polling Interval</div>
+          <div class="settings-description">How often to check device status (seconds)</div>
+        </div>
+        <input 
+          type="number" 
+          id="polling-interval" 
+          min="10" 
+          max="300" 
+          value="30"
+          style="width: 100px;"
+        />
+      </div>
+    </div>
+
+    <!-- Save Button (Initially Hidden) -->
+    <div id="save-section" class="hidden">
+      <button 
+        id="btn-save" 
+        class="btn btn-primary btn-block"
+        onclick="saveConfig()"
+      >
+        Save Configuration
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let discoveredDevices = [];
+    let selectedDeviceIds = new Set();
+
+    // Device type emoji mapping
+    const deviceEmojis = {
+      'light': '💡',
+      'bulb': '💡',
+      'plug': '🔌',
+      'switch': '🎚️',
+      'camera': '📷',
+      'default': '📱'
+    };
+
+    function getDeviceEmoji(model) {
+      const modelLower = (model || '').toLowerCase();
+      if (modelLower.includes('l') || modelLower.includes('light') || modelLower.includes('bulb')) {
+        return deviceEmojis.light;
+      }
+      if (modelLower.includes('p') || modelLower.includes('plug')) {
+        return deviceEmojis.plug;
+      }
+      return deviceEmojis.default;
+    }
+
+    async function discoverDevices() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      // Validate inputs
+      if (!email || !password) {
+        showError('credentials-error', 'Please enter both email and password');
+        return;
+      }
+
+      if (!email.includes('@')) {
+        showError('credentials-error', 'Please enter a valid email address');
+        return;
+      }
+
+      // Hide error and disable button
+      hideError('credentials-error');
+      const btnDiscover = document.getElementById('btn-discover');
+      btnDiscover.disabled = true;
+      btnDiscover.innerHTML = '<span class="loading-spinner"></span> Discovering...';
+
+      // Show discovery section
+      document.getElementById('step-discovery').classList.remove('hidden');
+      document.getElementById('discovery-loading').classList.remove('hidden');
+      document.getElementById('device-list').classList.add('hidden');
+      document.getElementById('no-devices').classList.add('hidden');
+
+      try {
+        // Call the plugin's discovery endpoint
+        const response = await homebridge.request('/discover', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+
+        discoveredDevices = response.devices || [];
+
+        if (discoveredDevices.length === 0) {
+          document.getElementById('discovery-loading').classList.add('hidden');
+          document.getElementById('no-devices').classList.remove('hidden');
+        } else {
+          renderDevices();
+          document.getElementById('discovery-loading').classList.add('hidden');
+          document.getElementById('device-list').classList.remove('hidden');
+          document.getElementById('step-settings').classList.remove('hidden');
+          document.getElementById('save-section').classList.remove('hidden');
+        }
+
+        btnDiscover.innerHTML = 'Re-discover Devices';
+        btnDiscover.disabled = false;
+
+      } catch (error) {
+        console.error('Discovery error:', error);
+        showError('discovery-error', error.message || 'Failed to discover devices. Please check your credentials and network connection.');
+        document.getElementById('discovery-loading').classList.add('hidden');
+        btnDiscover.innerHTML = 'Discover Devices';
+        btnDiscover.disabled = false;
+      }
+    }
+
+    function renderDevices() {
+      const grid = document.getElementById('devices-grid');
+      grid.innerHTML = '';
+
+      discoveredDevices.forEach(device => {
+        const card = createDeviceCard(device);
+        grid.appendChild(card);
+      });
+    }
+
+    function createDeviceCard(device) {
+      const card = document.createElement('div');
+      card.className = 'device-card';
+      card.id = `device-${device.mac}`;
+      
+      const isSelected = selectedDeviceIds.has(device.mac);
+      if (isSelected) {
+        card.classList.add('selected');
+      }
+
+      const emoji = getDeviceEmoji(device.model);
+      const status = device.online !== false ? 'online' : 'offline';
+
+      card.innerHTML = `
+        <div class="checkbox-wrapper">
+          <input 
+            type="checkbox" 
+            id="check-${device.mac}" 
+            ${isSelected ? 'checked' : ''}
+            onchange="toggleDevice('${device.mac}')"
+          />
+        </div>
+        <div class="device-card-header">
+          <div class="device-icon">${emoji}</div>
+          <div class="device-info">
+            <h3 class="device-name">${device.nickname || device.name || 'Unnamed Device'}</h3>
+            <p class="device-model">${device.model || 'Unknown Model'}</p>
+          </div>
+        </div>
+        <div class="device-meta">
+          <div class="device-meta-row">
+            <span>📍 ${device.ip}</span>
+          </div>
+          <div class="device-meta-row">
+            <span class="device-status ${status}">
+              ${status === 'online' ? '●' : '○'} ${status.toUpperCase()}
+            </span>
+          </div>
+        </div>
+      `;
+
+      card.onclick = (e) => {
+        if (e.target.type !== 'checkbox') {
+          toggleDevice(device.mac);
+        }
+      };
+
+      return card;
+    }
+
+    function toggleDevice(mac) {
+      const card = document.getElementById(`device-${mac}`);
+      const checkbox = document.getElementById(`check-${mac}`);
+
+      if (selectedDeviceIds.has(mac)) {
+        selectedDeviceIds.delete(mac);
+        card.classList.remove('selected');
+        checkbox.checked = false;
+      } else {
+        selectedDeviceIds.add(mac);
+        card.classList.add('selected');
+        checkbox.checked = true;
+      }
+    }
+
+    async function saveConfig() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const pollingInterval = parseInt(document.getElementById('polling-interval').value) || 30;
+
+      // Get selected devices
+      const selectedDevices = discoveredDevices
+        .filter(device => selectedDeviceIds.has(device.mac))
+        .map(device => ({
+          name: device.nickname || device.name || `Tapo ${device.model}`,
+          ip: device.ip,
+          type: 'light', // For now, all devices are treated as lights
+          mac: device.mac,
+          model: device.model
+        }));
+
+      if (selectedDevices.length === 0) {
+        showError('discovery-error', 'Please select at least one device');
+        return;
+      }
+
+      const btnSave = document.getElementById('btn-save');
+      btnSave.disabled = true;
+      btnSave.innerHTML = '<span class="loading-spinner"></span> Saving...';
+
+      try {
+        // Request the server to encrypt credentials
+        const encryptResponse = await homebridge.request('/encrypt-credentials', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+
+        const config = {
+          name: 'Tapo Platform',
+          email: encryptResponse.email,
+          password: encryptResponse.password,
+          isEncrypted: true,
+          devices: selectedDevices,
+          pollingInterval: pollingInterval
+        };
+
+        // Save to homebridge
+        await homebridge.updatePluginConfig([config]);
+        await homebridge.savePluginConfig();
+
+        // Show success and close
+        alert('✅ Configuration saved! Homebridge will restart to apply changes.');
+        homebridge.closeSettings();
+
+      } catch (error) {
+        console.error('Save error:', error);
+        alert('Failed to save configuration: ' + error.message);
+        btnSave.innerHTML = 'Save Configuration';
+        btnSave.disabled = false;
+      }
+    }
+
+    function showError(elementId, message) {
+      const errorEl = document.getElementById(elementId);
+      errorEl.textContent = message;
+      errorEl.classList.remove('hidden');
+    }
+
+    function hideError(elementId) {
+      const errorEl = document.getElementById(elementId);
+      errorEl.classList.add('hidden');
+    }
+
+    // Load existing config if available
+    async function loadExistingConfig() {
+      try {
+        const config = await homebridge.getPluginConfig();
+        if (config && config.length > 0) {
+          const pluginConfig = config[0];
+          
+          // Note: We can't decrypt the credentials in the UI for security reasons
+          // Just show that credentials exist
+          if (pluginConfig.email && pluginConfig.isEncrypted) {
+            document.getElementById('email').placeholder = '••••••••••••••••';
+            document.getElementById('password').placeholder = '••••••••••••••••';
+          }
+
+          if (pluginConfig.pollingInterval) {
+            document.getElementById('polling-interval').value = pluginConfig.pollingInterval;
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load config:', error);
+      }
+    }
+
+    // Initialize
+    loadExistingConfig();
+  </script>
+</body>
+</html>

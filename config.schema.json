@@ -2,6 +2,9 @@
   "pluginAlias": "TapoStoyanov",
   "pluginType": "platform",
   "singular": true,
+  "headerDisplay": "Configure your Tapo smart devices with an easy-to-use interface. This plugin supports automatic device discovery and encrypted credential storage.",
+  "footerDisplay": "For support and documentation, visit the [GitHub repository](https://github.com/stoyanov-x/homebridge-tapo-stoyanov).",
+  "customUi": true,
   "schema": {
     "type": "object",
     "properties": {
@@ -15,14 +18,19 @@
         "title": "TP-Link Account Email",
         "type": "string",
         "required": true,
-        "format": "email",
-        "description": "Your TP-Link/Tapo account email address"
+        "description": "Your TP-Link/Tapo account email address (encrypted)"
       },
       "password": {
-        "title": "TP-Link Account Password",
+        "title": "TP-Link Account Password",  
         "type": "string",
         "required": true,
-        "description": "Your TP-Link/Tapo account password"
+        "description": "Your TP-Link/Tapo account password (encrypted)"
+      },
+      "isEncrypted": {
+        "title": "Credentials Encrypted",
+        "type": "boolean",
+        "default": false,
+        "description": "Whether credentials are encrypted"
       },
       "devices": {
         "title": "Devices",
@@ -41,7 +49,6 @@
               "title": "IP Address",
               "type": "string",
               "required": true,
-              "format": "ipv4",
               "description": "Local IP address of the device"
             },
             "type": {
@@ -53,6 +60,16 @@
                 { "title": "Light Bulb", "enum": ["light"] }
               ],
               "description": "Type of Tapo device"
+            },
+            "mac": {
+              "title": "MAC Address",
+              "type": "string",
+              "description": "Device MAC address"
+            },
+            "model": {
+              "title": "Model",
+              "type": "string",
+              "description": "Device model"
             }
           }
         }
@@ -66,33 +83,5 @@
         "description": "How often to poll devices for status updates (10-300 seconds)"
       }
     }
-  },
-  "layout": [
-    {
-      "type": "flex",
-      "flex-flow": "row wrap",
-      "items": [
-        "name",
-        {
-          "key": "email",
-          "flex": "1 1 50%"
-        },
-        {
-          "key": "password",
-          "flex": "1 1 50%"
-        }
-      ]
-    },
-    {
-      "key": "devices",
-      "type": "array",
-      "title": "Devices",
-      "items": [
-        "devices[].name",
-        "devices[].ip",
-        "devices[].type"
-      ]
-    },
-    "pollingInterval"
-  ]
+  }
 }

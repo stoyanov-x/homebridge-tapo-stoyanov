@@ -7,6 +7,7 @@ export interface TapoPlatformConfig {
   name?: string;
   email: string;
   password: string;
+  isEncrypted?: boolean;
   devices: TapoDeviceConfig[];
   pollingInterval?: number;
 }
@@ -15,6 +16,8 @@ export interface TapoDeviceConfig {
   name: string;
   ip: string;
   type: 'light';
+  mac?: string;
+  model?: string;
 }
 
 export interface TapoDeviceInfo {
@@ -59,4 +62,17 @@ export interface TapoResponse<T = any> {
 export interface TapoCredentials {
   email: string;
   password: string;
+}
+
+export interface DiscoveredDevice {
+  name: string;
+  nickname?: string;
+  ip: string;
+  mac: string;
+  model: string;
+  type: string;
+  online: boolean;
+  device_on?: boolean;
+  hw_ver?: string;
+  fw_ver?: string;
 }

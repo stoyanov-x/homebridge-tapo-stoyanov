@@ -30,6 +30,7 @@
     "url": "https://github.com/stoyanov-x/homebridge-tapo-stoyanov/issues"
   },
   "dependencies": {
+    "@homebridge/plugin-ui-utils": "^1.0.3",
     "axios": "^1.6.0",
     "crypto-js": "^4.2.0"
   },

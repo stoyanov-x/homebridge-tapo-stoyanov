@@ -5,6 +5,7 @@
 ## What You Have
 
 ✅ **Fully functional Homebridge plugin** for Tapo L430C smart bulbs  
+✅ **Custom configuration UI** with device discovery and encrypted credentials  
 ✅ **Successfully tested** with real L430C hardware  
 ✅ **Complete TypeScript implementation** of KLAP protocol  
 ✅ **All features working**: power, brightness, RGB color, color temperature
@@ -13,6 +14,7 @@
 
 - **src/** - TypeScript source code (ready for any modifications)
 - **dist/** - Compiled JavaScript (ready to run with Homebridge)
+- **homebridge-ui/** - Custom configuration UI with device discovery
 - **research/** - Device testing tools and research documentation
 - **README.md** - User documentation
 - **config.sample.json** - Example Homebridge configuration
@@ -22,7 +24,7 @@
 Before installing the plugin, verify your device works:
 
 ```bash
-./research/test_device.sh
+research/test_device.sh
 ```
 
 This will test your L430C and confirm all features are working.
@@ -55,7 +57,19 @@ npm install -g homebridge-tapo-stoyanov
 
 ## Homebridge Configuration
 
-Add this to your Homebridge `config.json`:
+### Using the Custom UI (Easiest! ⭐)
+
+Once you've installed the plugin in Homebridge Config UI X:
+
+1. **Click "Settings"** on the plugin card
+2. **Enter your TP-Link credentials** (will be encrypted automatically)
+3. **Click "Discover Devices"** - scans your network automatically
+4. **Select devices** by clicking on their cards (with emojis!)
+5. **Click "Save"** - done! Your devices appear in HomeKit
+
+### Manual Configuration (Advanced)
+
+Alternatively, add this to your Homebridge `config.json`:
 
 ```json
 {

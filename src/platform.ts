@@ -15,7 +15,8 @@ import {
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { TapoLightAccessory } from './lightAccessory';
-import { TapoPlatformConfig, TapoDeviceConfig } from './types';
+import { TapoPlatformConfig, TapoDeviceConfig, TapoCredentials } from './types';
+import { getDecryptedCredentials, discoverDevices } from './utils';
 
 export class TapoPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -28,6 +29,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
   private readonly activeAccessories: Map<string, TapoLightAccessory> = new Map();
   
   public readonly config: TapoPlatformConfig;
+  public readonly credentials: TapoCredentials;
 
   constructor(
     public readonly log: Logger,
@@ -41,6 +43,17 @@ export class TapoPlatform implements DynamicPlatformPlugin {
     // Validate configuration
     if (!this.config.email || !this.config.password) {
       this.log.error('TP-Link account email and password are required in config');
+      this.credentials = { email: '', password: '' };
+      return;
+    }
+    
+    // Decrypt credentials if encrypted
+    try {
+      this.credentials = getDecryptedCredentials(this.config);
+      this.log.debug('Credentials loaded successfully');
+    } catch (error) {
+      this.log.error('Failed to decrypt credentials:', error);
+      this.credentials = { email: '', password: '' };
       return;
     }
     
@@ -51,10 +64,25 @@ export class TapoPlatform implements DynamicPlatformPlugin {
 
     this.log.debug('Finished initializing platform:', this.config.name || 'Tapo Platform');
 
+    // Setup custom UI server for device discovery
+    this.setupCustomUIServer();
+
     // When Homebridge finishes loading cached accessories, discover devices
     this.api.on('didFinishLaunching', () => {
       this.log.debug('Executed didFinishLaunching callback');
       this.discoverDevices();
+    });
+  }
+
+  /**
+   * Setup custom UI server endpoints
+   */
+  private setupCustomUIServer() {
+    // Register discovery endpoint
+    this.api.on('didFinishLaunching', () => {
+      // The custom UI will make POST requests to /discover
+      // Homebridge Config UI X handles this automatically with customUi: true
+      this.log.debug('Custom UI server ready for device discovery');
     });
   }
 

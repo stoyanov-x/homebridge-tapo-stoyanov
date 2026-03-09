@@ -1,0 +1,186 @@
+/**
+ * Utilities for credential encryption and device discovery
+ */
+
+import * as crypto from 'crypto';
+import { TapoClient } from './tapoClient';
+import { TapoCredentials, DiscoveredDevice } from './types';
+
+const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
+const ENCRYPTION_KEY = 'tapo-stoyanov-plugin-encryption-key-2026-v1'; // Fixed key for simplicity
+
+/**
+ * Encrypt a credential string
+ */
+export function encryptCredential(value: string): string {
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ENCRYPTION_ALGORITHM, key, iv);
+  
+  let encrypted = cipher.update(value, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  
+  const authTag = cipher.getAuthTag();
+  
+  // Combine IV, auth tag, and encrypted data
+  const combined = iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;
+  return 'encrypted:' + combined;
+}
+
+/**
+ * Decrypt a credential string
+ */
+export function decryptCredential(encryptedValue: string): string {
+  if (!encryptedValue.startsWith('encrypted:')) {
+    // Not encrypted, return as-is (backward compatibility, though not needed per requirements)
+    return encryptedValue;
+  }
+
+  const value = encryptedValue.substring('encrypted:'.length);
+  const parts = value.split(':');
+  
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted credential format');
+  }
+
+  const iv = Buffer.from(parts[0], 'hex');
+  const authTag = Buffer.from(parts[1], 'hex');
+  const encrypted = parts[2];
+
+  const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, key, iv);
+  decipher.setAuthTag(authTag);
+
+  let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+
+  return decrypted;
+}
+
+/**
+ * Get decrypted credentials from config
+ */
+export function getDecryptedCredentials(config: { email: string; password: string; isEncrypted?: boolean }): TapoCredentials {
+  if (config.isEncrypted) {
+    return {
+      email: decryptCredential(config.email),
+      password: decryptCredential(config.password),
+    };
+  }
+  return {
+    email: config.email,
+    password: config.password,
+  };
+}
+
+/**
+ * Discover Tapo devices on the network
+ * This is a simplified version that scans common IP ranges
+ */
+export async function discoverDevices(credentials: TapoCredentials, logger?: any): Promise<DiscoveredDevice[]> {
+  const devices: DiscoveredDevice[] = [];
+  
+  // Get local network subnet (simplified - assumes 192.168.1.x)
+  // In production, you might want to use a more sophisticated network scanner
+  const subnet = '192.168.1';
+  const scanRange = 254; // Scan .1 to .254
+  
+  const log = logger || console;
+  log.info?.(`Scanning network ${subnet}.0/24 for Tapo devices...`);
+
+  // Scan in batches to avoid overwhelming the network
+  const batchSize = 10;
+  const promises: Promise<void>[] = [];
+
+  for (let i = 1; i <= scanRange; i++) {
+    const ip = `${subnet}.${i}`;
+    
+    const scanPromise = (async () => {
+      try {
+        const client = new TapoClient(ip, credentials);
+        const info = await Promise.race([
+          client.getDeviceInfo(),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('timeout')), 2000)
+          ),
+        ]);
+
+        if (info) {
+          devices.push({
+            name: info.nickname || info.model,
+            nickname: info.nickname,
+            ip: ip,
+            mac: info.mac || `unknown-${ip}`,
+            model: info.model || 'Unknown',
+            type: info.type || 'light',
+            online: true,
+            device_on: info.device_on,
+            hw_ver: info.hw_ver,
+            fw_ver: info.fw_ver,
+          });
+          log.info?.(`Found device: ${info.nickname || info.model} at ${ip}`);
+        }
+      } catch (error) {
+        // Device not found or not responding - this is expected for most IPs
+        // Only log actual errors, not timeouts or connection refused
+        if (error instanceof Error && 
+            !error.message.includes('timeout') && 
+            !error.message.includes('ECONNREFUSED') &&
+            !error.message.includes('ETIMEDOUT') &&
+            !error.message.includes('EHOSTUNREACH')) {
+          log.debug?.(`Error scanning ${ip}: ${error.message}`);
+        }
+      }
+    })();
+
+    promises.push(scanPromise);
+
+    // Wait for batch to complete before starting next batch
+    if (promises.length >= batchSize) {
+      await Promise.all(promises);
+      promises.length = 0;
+    }
+  }
+
+  // Wait for remaining promises
+  if (promises.length > 0) {
+    await Promise.all(promises);
+  }
+
+  log.info?.(`Discovery complete. Found ${devices.length} device(s)`);
+  return devices;
+}
+
+/**
+ * Quick check if a specific IP has a Tapo device
+ */
+export async function checkDevice(ip: string, credentials: TapoCredentials): Promise<DiscoveredDevice | null> {
+  try {
+    const client = new TapoClient(ip, credentials);
+    const info = await Promise.race([
+      client.getDeviceInfo(),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('timeout')), 3000)
+      ),
+    ]);
+
+    if (info) {
+      return {
+        name: info.nickname || info.model,
+        nickname: info.nickname,
+        ip: ip,
+        mac: info.mac || `unknown-${ip}`,
+        model: info.model || 'Unknown',
+        type: info.type || 'light',
+        online: true,
+        device_on: info.device_on,
+        hw_ver: info.hw_ver,
+        fw_ver: info.fw_ver,
+      };
+    }
+  } catch (error) {
+    // Device not responding
+  }
+  
+  return null;
+}
