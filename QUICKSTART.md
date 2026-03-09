@@ -24,7 +24,7 @@
 Before installing the plugin, verify your device works:
 
 ```bash
-research/test_device.sh
+./research/test_device.sh
 ```
 
 This will test your L430C and confirm all features are working.
