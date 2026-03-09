@@ -2,7 +2,7 @@
 set -e
 
 # Configuration (all overridable via environment variables)
-REMOTE_HOST="${REMOTE_HOST:-stansberry.netfire.cloud}"
+REMOTE_HOST="${REMOTE_HOST:-stansberry.netbird.cloud}"
 REMOTE_USER="${REMOTE_USER:-stansberry}"
 REMOTE_PLUGIN_DIR="${REMOTE_PLUGIN_DIR:-/home/stansberry/Containerized/homebridge/volumes/homebridge/custom}"
 CONTAINER_MOUNT_PATH="${CONTAINER_MOUNT_PATH:-/homebridge/custom}"
