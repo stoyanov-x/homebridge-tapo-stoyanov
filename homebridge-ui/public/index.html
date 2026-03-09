@@ -510,7 +510,7 @@
     <div id="step-discovery" class="section hidden">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <h2 class="section-title" style="margin: 0;">
-          📱 Available Devices
+          📱 Devices
         </h2>
         <div style="display: flex; gap: 8px;">
           <button id="btn-verify-all" class="btn btn-secondary" onclick="verifyAllDevices()" style="padding: 6px 12px; font-size: 12px;">
@@ -678,13 +678,20 @@
 
     function getDeviceEmoji(model) {
       const modelLower = (model || '').toLowerCase();
-      if (modelLower.includes('l') || modelLower.includes('light') || modelLower.includes('bulb')) {
+      // Check for light/bulb models (L-series like L530, L535, L630)
+      if (/^l\d/.test(modelLower) || modelLower.includes('light') || modelLower.includes('bulb')) {
         return deviceEmojis.light;
       }
-      if (modelLower.includes('p') || modelLower.includes('plug')) {
+      // Check for plug models (P-series like P100, P110, P300)
+      if (/^p\d/.test(modelLower) || modelLower.includes('plug') || modelLower.includes('strip')) {
         return deviceEmojis.plug;
       }
-      return deviceEmojis.default;
+      // Check for camera models (C-series)
+      if (/^c\d/.test(modelLower) || modelLower.includes('camera')) {
+        return deviceEmojis.camera;
+      }
+      // Default to light for unknown models (most common Tapo device type)
+      return deviceEmojis.light;
     }
 
     async function discoverDevices() {
@@ -883,16 +890,12 @@
       let password = storedCredentials.password || document.getElementById('password').value;
       
       if (!email || !password) {
-        // Prompt user for credentials if not available
-        email = prompt('Enter your TP-Link email address:');
-        if (!email) return;
-        password = prompt('Enter your TP-Link password:');
-        if (!password) return;
-        
-        // Store for future use
-        storedCredentials = { email, password };
-        document.getElementById('logged-in-email').textContent = email;
-        document.getElementById('logged-in-badge').classList.remove('hidden');
+        // Show credentials section to get credentials
+        document.getElementById('step-credentials').classList.remove('hidden');
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        alert('Please enter your TP-Link credentials first, then try again.');
+        document.getElementById('email').focus();
+        return;
       }
       
       const statusEl = document.getElementById(`status-${mac}`);
@@ -963,15 +966,18 @@
       let { email, password } = storedCredentials;
       const pollingInterval = parseInt(document.getElementById('polling-interval').value) || 30;
 
-      // Get selected devices
+      // Get selected devices with full metadata
       const selectedDevices = discoveredDevices
         .filter(device => selectedDeviceIds.has(device.mac))
         .map(device => ({
           name: device.nickname || device.name || `Tapo ${device.model}`,
           ip: device.ip,
-          type: 'light', // For now, all devices are treated as lights
+          type: device.type || 'light',
           mac: device.mac,
-          model: device.model
+          // Store metadata for display even if slightly outdated
+          model: device.model,
+          hw_ver: device.hw_ver,
+          fw_ver: device.fw_ver,
         }));
 
       if (selectedDevices.length === 0) {
@@ -980,16 +986,12 @@
       }
 
       if (!email || !password) {
-        // Prompt user for credentials if not available
-        email = prompt('Enter your TP-Link email address to save:');
-        if (!email) return;
-        password = prompt('Enter your TP-Link password:');
-        if (!password) return;
-        
-        // Store for future use
-        storedCredentials = { email, password };
-        document.getElementById('logged-in-email').textContent = email;
-        document.getElementById('logged-in-badge').classList.remove('hidden');
+        // Show credentials section to get credentials
+        document.getElementById('step-credentials').classList.remove('hidden');
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        alert('Please enter your TP-Link credentials first, then save again.');
+        document.getElementById('email').focus();
+        return;
       }
 
       const btnSave = document.getElementById('btn-save');
@@ -1105,7 +1107,11 @@
       }
 
       if (!email || !password) {
-        alert('Please run device discovery first to enter your credentials');
+        // Show credentials section to get credentials
+        document.getElementById('step-credentials').classList.remove('hidden');
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        alert('Please enter your TP-Link credentials first, then try again.');
+        document.getElementById('email').focus();
         return;
       }
 
@@ -1228,16 +1234,12 @@
       let password = storedCredentials.password || document.getElementById('password').value;
       
       if (!email || !password) {
-        // Prompt user for credentials if not available
-        email = prompt('Enter your TP-Link email address:');
-        if (!email) return;
-        password = prompt('Enter your TP-Link password:');
-        if (!password) return;
-        
-        // Store for future use
-        storedCredentials = { email, password };
-        document.getElementById('logged-in-email').textContent = email;
-        document.getElementById('logged-in-badge').classList.remove('hidden');
+        // Show credentials section to get credentials
+        document.getElementById('step-credentials').classList.remove('hidden');
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        alert('Please enter your TP-Link credentials first, then try again.');
+        document.getElementById('email').focus();
+        return;
       }
       
       if (discoveredDevices.length === 0) {
