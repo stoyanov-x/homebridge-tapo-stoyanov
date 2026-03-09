@@ -151,11 +151,11 @@ export class TapoLightAccessory {
       this.service.updateCharacteristic(this.platform.Characteristic.Saturation, this.state.Saturation);
 
       // Log poll summary
+      const colorMode = info.color_temp ? `${info.color_temp}K` : `H${this.state.Hue}° S${this.state.Saturation}%`;
       this.log.info(
         `[${this.config.name}] ${this.state.On ? 'ON' : 'OFF'} ` +
         `${this.state.Brightness}% ` +
-        `H${this.state.Hue}° S${this.state.Saturation}% ` +
-        `${info.color_temp || 0}K`
+        `${colorMode}`
       );
 
     } catch (error: any) {
