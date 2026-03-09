@@ -100,7 +100,7 @@ If you prefer to edit the config file directly, add this to your Homebridge `con
 | `pollingInterval` | No | How often to poll devices for updates in seconds (default: 30, range: 10-300) |
 | `devices` | Yes | Array of device configurations |
 
-**Note:** When using the custom UI, credentials are automatically encrypted using AES-256-GCM encryption for secure storage.
+**Note:** The custom UI encrypts credentials using AES-256-GCM with a key derived from your Homebridge bridge credentials (MAC + PIN). This makes the encryption unique per installation.
 
 ### Device Configuration
 

@@ -1,207 +1,32 @@
-# Quick Start Guide
+# Quick Start
 
-## Your Homebridge Tapo Plugin is Ready! 🎉
-
-## What You Have
-
-✅ **Fully functional Homebridge plugin** for Tapo L430C smart bulbs  
-✅ **Custom configuration UI** with device discovery and encrypted credentials  
-✅ **Successfully tested** with real L430C hardware  
-✅ **Complete TypeScript implementation** of KLAP protocol  
-✅ **All features working**: power, brightness, RGB color, color temperature
-
-## Files Overview
-
-- **src/** - TypeScript source code (ready for any modifications)
-- **dist/** - Compiled JavaScript (ready to run with Homebridge)
-- **homebridge-ui/** - Custom configuration UI with device discovery
-- **research/** - Device testing tools and research documentation
-- **README.md** - User documentation
-- **config.sample.json** - Example Homebridge configuration
-
-## Test Your Device First
-
-Before installing the plugin, verify your device works:
-
+## 1. Test Device (Optional)
 ```bash
 ./research/test_device.sh
 ```
 
-This will test your L430C and confirm all features are working.
+## 2. Install Plugin
+Via Homebridge Config UI X, search "homebridge-tapo-stoyanov" and install.
 
-## Installation Options
-
-### Option 1: Use Locally (Development/Testing)
-
+Or locally:
 ```bash
-cd /Users/stoyanov/Documents/GitHub/stoyanov-x/homebridge-tapo-stoyanov
-
-# Link the plugin locally
 npm link
-
-# Restart Homebridge to load your plugin
 ```
 
-### Option 2: Publish to NPM (Share with Others)
+## 3. Configure
+1. Click **Settings** on the plugin
+2. Enter TP-Link credentials
+3. Click **Discover Devices**
+4. Select devices → **Save**
 
-```bash
-# Make sure you're logged into NPM
-npm login
+## 4. Test
+- Home app: Look for your devices
+- Siri: "Turn on [Device Name]"
+- Logs: Check for "Initialized [name] at [IP]"
 
-# Publish (you may want to update version/name first)
-npm publish
+## Troubleshoot
+- **Not found**: Verify IP, ping device
+- **Auth errors**: Check credentials work in Tapo app
+- **Debug**: Enable debug logging in Homebridge
 
-# Install on any system with:
-npm install -g homebridge-tapo-stoyanov
-```
-
-## Homebridge Configuration
-
-### Using the Custom UI (Easiest! ⭐)
-
-Once you've installed the plugin in Homebridge Config UI X:
-
-1. **Click "Settings"** on the plugin card
-2. **Enter your TP-Link credentials** (will be encrypted automatically)
-3. **Click "Discover Devices"** - scans your network automatically
-4. **Select devices** by clicking on their cards (with emojis!)
-5. **Click "Save"** - done! Your devices appear in HomeKit
-
-### Manual Configuration (Advanced)
-
-Alternatively, add this to your Homebridge `config.json`:
-
-```json
-{
-  "platforms": [
-    {
-      "platform": "TapoStoyanov",
-      "name": "Tapo Platform",
-      "email": "your-tapo-email@example.com",
-      "password": "your-tapo-password",
-      "pollingInterval": 30,
-      "devices": [
-        {
-          "name": "Living Room Light",
-          "ip": "192.168.1.100",
-          "type": "light"
-        },
-        {
-          "name": "Bedroom Light",
-          "ip": "192.168.1.101",
-          "type": "light"
-        }
-      ]
-    }
-  ]
-}
-```
-
-## Adding More Devices
-
-To add additional bulbs:
-
-1. Find its IP address (check your router's DHCP table or Tapo app)
-2. Add to the devices array:
-   ```json
-   {
-     "name": "Another Light",
-     "ip": "192.168.1.X",
-     "type": "light"
-   }
-   ```
-3. Restart Homebridge
-
-## Testing the Plugin
-
-After installing and configuring:
-
-1. **Check Homebridge Logs**
-   ```
-   [Tapo Platform] Initialized [Device Name] at [IP Address]
-   ```
-
-2. **Open Home App**
-   - Look for your configured devices in accessories
-   - Tap to control them
-
-3. **Test with Siri**
-   - "Hey Siri, turn on [Device Name]"
-   - "Hey Siri, set [Device Name] to 50%"
-   - "Hey Siri, make [Device Name] blue"
-
-## Troubleshooting
-
-### Device Not Appearing
-
-1. Check Homebridge logs for errors
-2. Verify device IP is correct and reachable:
-   ```bash
-   ping YOUR_DEVICE_IP
-   ```
-3. Ensure credentials are correct
-
-### Authentication Errors
-
-- Make sure your TP-Link email/password are correct
-- Try controlling the device in the Tapo app first
-- Check that the device is online
-
-### Need More Details?
-
-- **For users**: See [README.md](README.md)
-- **Technical info**: See [RESEARCH.md](RESEARCH.md)
-- **Implementation**: See [IMPLEMENTATION.md](IMPLEMENTATION.md)
-
-## Next Steps
-
-### Immediate
-- [ ] Install plugin with `npm link`
-- [ ] Add config to Homebridge with your credentials and device IPs
-- [ ] Restart Homebridge
-- [ ] Test in Home app
-
-### Soon
-- [ ] Connect additional devices to Wi-Fi
-- [ ] Add their configurations
-- [ ] Set up HomeKit automations
-
-### Future
-- [ ] Add more Tapo devices (plugs, sensors, etc.)
-- [ ] Publish to NPM if you want to share
-- [ ] Contribute improvements back
-
-## Making Changes
-
-To modify the plugin:
-
-1. Edit TypeScript files in `src/`
-2. Rebuild: `npm run build`
-3. Restart Homebridge
-4. Check logs for any errors
-
-The code is well-documented and structured for easy modifications!
-
-## Git Repository
-
-Initialize Git to track your changes:
-
-```bash
-cd /Users/stoyanov/Documents/GitHub/stoyanov-x/homebridge-tapo-stoyanov
-git init
-git add .
-git commit -m "Initial commit - Homebridge Tapo plugin"
-git remote add origin https://github.com/stoyanov-x/homebridge-tapo-stoyanov.git
-git push -u origin main
-```
-
-## Need Help?
-
-Check the following files for detailed information:
-- **README.md** - User guide
-- **RESEARCH.md** - How the L430C works and KLAP protocol details
-- **IMPLEMENTATION.md** - What was built and how
-
----
-
-**Enjoy your new Homebridge plugin! 🏡✨**
+See [README.md](README.md) for full documentation.

@@ -31,16 +31,19 @@ homebridge-tapo-stoyanov/
 │   ├── lightAccessory.ts     # Light bulb accessory
 │   ├── tapoClient.ts         # Tapo API client (KLAP protocol)
 │   ├── types.ts              # TypeScript interfaces
-│   └── settings.ts           # Constants
-├── dist/                     # Compiled JavaScript (ready to use)
+│   ├── settings.ts           # Plugin/platform name constants
+│   ├── constants.ts          # All other constants (polling, crypto, etc.)
+│   └── utils.ts              # Encryption, discovery utilities
+├── homebridge-ui/
+│   ├── server.js             # Custom UI backend
+│   └── public/index.html     # Custom UI frontend
+├── dist/                     # Compiled JavaScript
+├── research/                 # Device testing tools
 ├── package.json              # NPM package definition
 ├── tsconfig.json             # TypeScript config
 ├── config.schema.json        # Homebridge UI config schema
-├── config.sample.json        # Sample configuration
 ├── README.md                 # User documentation
-├── RESEARCH.md               # Technical research findings
 └── LICENSE                   # MIT license
-
 ```
 
 ## 🎯 Features Implemented
@@ -57,6 +60,7 @@ homebridge-tapo-stoyanov/
 - ✅ Siri voice control ready
 - ✅ Automation support
 - ✅ Adaptive lighting compatible
+- ✅ State sync with device polling
 
 ### Protocol Implementation
 - ✅ KLAP authentication
@@ -64,6 +68,10 @@ homebridge-tapo-stoyanov/
 - ✅ Session management with auto-renewal
 - ✅ Signature verification
 - ✅ Error handling with retry logic
+
+### Security
+- ✅ Credential encryption with AES-256-GCM
+- ✅ Key derived from bridge credentials (unique per installation)
 
 ## 📝 Configuration
 
@@ -97,36 +105,7 @@ Devices can be configured like this:
 
 Simply add more device entries to the array to control additional bulbs.
 
-## 🚀 Next Steps
-
-### To Use the Plugin:
-
-1. **Option A: Local Development**
-   ```bash
-   cd /Users/stoyanov/Documents/GitHub/stoyanov-x/homebridge-tapo-stoyanov
-   npm link
-   ```
-   Then add the configuration to your Homebridge `config.json`
-
-2. **Option B: Publish to NPM**
-   ```bash
-   npm publish
-   ```
-   Then install via: `npm install -g homebridge-tapo-stoyanov`
-
-3. **Test the Plugin**
-   - Restart Homebridge
-   - Check logs for "Initialized [device name] at [IP]"
-   - Open Home app and look for the device
-   - Test controlling it
-
-### To Add More Devices:
-
-1. Ensure device has static IP or DHCP reservation
-2. Add to `devices` array in config
-3. Restart Homebridge
-
-## 🔍 Key Technical Details
+##  Key Technical Details
 
 ### KLAP Protocol
 The plugin implements the Key-based Local Authentication Protocol:
@@ -151,13 +130,6 @@ The plugin implements the Key-based Local Authentication Protocol:
 | Hue | 0-360 | Degrees |
 | Saturation | 0-100 | Percentage |
 
-## 📚 Documentation
-
-- **README.md**: User-facing documentation
-- **RESEARCH.md**: Technical research findings
-- **config.sample.json**: Example configuration
-- **config.schema.json**: Homebridge UI integration
-
 ## ✨ What's Working
 
 Based on successful tests:
@@ -178,12 +150,9 @@ Based on successful tests:
 
 ## 🔮 Future Enhancements
 
-The plugin is designed to be extensible:
-- Support for other Tapo bulb models (L530, L630, etc.)
-- LED strip support (L900 series)
-- Smart plug support with power monitoring (P110)
-- Sensor support (T110 contact, T100 motion)
-- Dynamic effects and scenes
+- Other Tapo bulb models (L530, L630, L900 strips)
+- Smart plugs with power monitoring (P110)
+- Sensors (T110 contact, T100 motion)
 
 ## 📄 License
 
