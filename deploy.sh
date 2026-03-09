@@ -2,13 +2,24 @@
 set -e
 
 # Configuration (all overridable via environment variables)
+PLUGIN_PATTERN="${PLUGIN_PATTERN:-homebridge-*.tgz}"
+CONTAINER_PATTERN="${CONTAINER_PATTERN:-homebridge-homebridge-}"
+
 REMOTE_HOST="${REMOTE_HOST:-stansberry.netbird.cloud}"
 REMOTE_USER="${REMOTE_USER:-stansberry}"
+
 REMOTE_PLUGIN_DIR="${REMOTE_PLUGIN_DIR:-/home/stansberry/Containerized/homebridge/volumes/homebridge/custom}"
 CONTAINER_MOUNT_PATH="${CONTAINER_MOUNT_PATH:-/homebridge/custom}"
-CONTAINER_PATTERN="${CONTAINER_PATTERN:-homebridge-homebridge-}"
-PLUGIN_PATTERN="${PLUGIN_PATTERN:-homebridge-*.tgz}"
 
+# SSH multiplexing - authenticate once, reuse connection
+SSH_CONTROL_PATH="/tmp/ssh-deploy-$$"
+SSH_OPTS="-o ControlMaster=auto -o ControlPath=$SSH_CONTROL_PATH -o ControlPersist=60"
+
+# Cleanup on exit
+cleanup() {
+    ssh -O exit -o ControlPath="$SSH_CONTROL_PATH" "$REMOTE_USER@$REMOTE_HOST" 2>/dev/null || true
+}
+trap cleanup EXIT
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -40,7 +51,7 @@ find_latest_tgz() {
 
 # Find the homebridge container on remote host
 find_container() {
-    ssh "$REMOTE_USER@$REMOTE_HOST" "sudo docker ps --format '{{.Names}}' | grep -E '^${CONTAINER_PATTERN}' | head -1"
+    ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "sudo docker ps --format '{{.Names}}' | grep -E '^${CONTAINER_PATTERN}' | head -1"
 }
 
 # Main deployment
@@ -54,11 +65,11 @@ main() {
     
     # Step 2: Copy to remote host
     log_info "Copying to remote host..."
-    scp "$tgz_file" "$REMOTE_USER@$REMOTE_HOST:/tmp/$tgz_basename"
+    scp $SSH_OPTS "$tgz_file" "$REMOTE_USER@$REMOTE_HOST:/tmp/$tgz_basename"
     
     # Step 3: Move to plugin directory (requires sudo)
     log_info "Moving to plugin directory..."
-    ssh "$REMOTE_USER@$REMOTE_HOST" "sudo mv /tmp/$tgz_basename $REMOTE_PLUGIN_DIR/"
+    ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "sudo mv /tmp/$tgz_basename $REMOTE_PLUGIN_DIR/"
     
     # Step 4: Find the container name
     log_info "Finding Homebridge container..."
@@ -71,11 +82,11 @@ main() {
     
     # Step 5: Install the plugin inside the container
     log_info "Installing plugin in container..."
-    ssh "$REMOTE_USER@$REMOTE_HOST" "sudo docker exec $container npm --prefix /var/lib/homebridge install $CONTAINER_MOUNT_PATH/$tgz_basename"
+    ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "sudo docker exec $container npm --prefix /var/lib/homebridge install $CONTAINER_MOUNT_PATH/$tgz_basename"
     
     # Step 6: Restart the container
     log_info "Restarting container..."
-    ssh "$REMOTE_USER@$REMOTE_HOST" "sudo docker restart $container"
+    ssh $SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" "sudo docker restart $container"
     
     log_info "Deployment complete!"
 }
