@@ -164,6 +164,44 @@
       margin-bottom: 16px;
     }
 
+    .progress-container {
+      width: 100%;
+      max-width: 300px;
+      margin: 16px auto 0;
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #e5e5e7;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: #007aff;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .progress-text {
+      font-size: 13px;
+      color: #86868b;
+      margin-top: 8px;
+    }
+
+    .credentials-collapsed {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+
+    .credentials-collapsed .form-group,
+    .credentials-collapsed .section-description {
+      display: none;
+    }
+
     .alert {
       padding: 12px 16px;
       border-radius: 8px;
@@ -469,6 +507,12 @@
       <div id="discovery-loading" class="loading-container">
         <div class="loading-spinner"></div>
         <p id="discovery-status">Scanning your network for Tapo devices...</p>
+        <div class="progress-container">
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="discovery-progress-bar"></div>
+          </div>
+          <p class="progress-text" id="discovery-progress-text"></p>
+        </div>
       </div>
 
       <div id="discovery-error" class="alert alert-error hidden"></div>
@@ -572,8 +616,32 @@
     // Listen for discovery progress events
     homebridge.addEventListener('discovery_progress', (event) => {
       const statusEl = document.getElementById('discovery-status');
-      if (statusEl && event.data?.message) {
-        statusEl.textContent = event.data.message;
+      const progressBar = document.getElementById('discovery-progress-bar');
+      const progressText = document.getElementById('discovery-progress-text');
+      
+      if (event.data?.message) {
+        const msg = event.data.message;
+        
+        // Update status text
+        if (statusEl) {
+          statusEl.textContent = msg;
+        }
+        
+        // Extract percentage from message like "Scanning 192.168.0.x... 24% (4 found)"
+        const percentMatch = msg.match(/(\d+)%/);
+        if (percentMatch && progressBar) {
+          const percent = parseInt(percentMatch[1], 10);
+          progressBar.style.width = percent + '%';
+        }
+        
+        // Extract found count and show as progress text
+        const foundMatch = msg.match(/\((\d+) found\)/);
+        if (foundMatch && progressText) {
+          progressText.textContent = `${foundMatch[1]} device(s) found so far`;
+        } else if (progressText && msg.includes('Found:')) {
+          // Handle "Found: device_name at IP" messages
+          progressText.textContent = msg;
+        }
       }
     });
 
@@ -622,11 +690,20 @@
       btnDiscover.disabled = true;
       btnDiscover.innerHTML = '<span class="loading-spinner"></span> Discovering...';
 
+      // Collapse credentials section during discovery
+      document.getElementById('step-credentials').classList.add('credentials-collapsed');
+
       // Show discovery section
       document.getElementById('step-discovery').classList.remove('hidden');
       document.getElementById('discovery-loading').classList.remove('hidden');
       document.getElementById('device-list').classList.add('hidden');
       document.getElementById('no-devices').classList.add('hidden');
+      
+      // Reset progress bar
+      const progressBar = document.getElementById('discovery-progress-bar');
+      const progressText = document.getElementById('discovery-progress-text');
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressText) progressText.textContent = '';
 
       try {
         // Call the plugin's discovery endpoint
@@ -644,7 +721,8 @@
         }
 
         // Always show manual entry, settings, and save after discovery
-        // Hide credentials section to reduce clutter
+        // Hide credentials section completely after successful discovery
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
         document.getElementById('step-credentials').classList.add('hidden');
         document.getElementById('step-manual').classList.remove('hidden');
         document.getElementById('step-settings').classList.remove('hidden');
@@ -657,6 +735,8 @@
         console.error('Discovery error:', error);
         showError('discovery-error', error.message || 'Failed to discover devices. Please check your credentials and network connection.');
         document.getElementById('discovery-loading').classList.add('hidden');
+        // Un-collapse credentials section on error so user can re-enter
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
         btnDiscover.innerHTML = 'Discover Devices';
         btnDiscover.disabled = false;
       }
@@ -938,6 +1018,7 @@
 
       // Show credentials, hide all other steps
       document.getElementById('step-credentials').classList.remove('hidden');
+      document.getElementById('step-credentials').classList.remove('credentials-collapsed');
       document.getElementById('step-discovery').classList.add('hidden');
       document.getElementById('step-manual').classList.add('hidden');
       document.getElementById('step-settings').classList.add('hidden');
@@ -948,6 +1029,13 @@
       document.getElementById('device-list').classList.add('hidden');
       document.getElementById('no-devices').classList.add('hidden');
       hideError('discovery-error');
+      
+      // Reset progress bar
+      const progressBar = document.getElementById('discovery-progress-bar');
+      const progressText = document.getElementById('discovery-progress-text');
+      if (progressBar) progressBar.style.width = '0%';
+      if (progressText) progressText.textContent = '';
+      document.getElementById('discovery-status').textContent = 'Scanning your network for Tapo devices...';
 
       // Reset button
       const btnDiscover = document.getElementById('btn-discover');
