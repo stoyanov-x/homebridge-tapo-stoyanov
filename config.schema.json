@@ -1,0 +1,98 @@
+{
+  "pluginAlias": "TapoStoyanov",
+  "pluginType": "platform",
+  "singular": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "name": {
+        "title": "Name",
+        "type": "string",
+        "required": true,
+        "default": "Tapo Platform"
+      },
+      "email": {
+        "title": "TP-Link Account Email",
+        "type": "string",
+        "required": true,
+        "format": "email",
+        "description": "Your TP-Link/Tapo account email address"
+      },
+      "password": {
+        "title": "TP-Link Account Password",
+        "type": "string",
+        "required": true,
+        "description": "Your TP-Link/Tapo account password"
+      },
+      "devices": {
+        "title": "Devices",
+        "type": "array",
+        "required": true,
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "title": "Device Name",
+              "type": "string",
+              "required": true,
+              "description": "Friendly name for the device"
+            },
+            "ip": {
+              "title": "IP Address",
+              "type": "string",
+              "required": true,
+              "format": "ipv4",
+              "description": "Local IP address of the device"
+            },
+            "type": {
+              "title": "Device Type",
+              "type": "string",
+              "required": true,
+              "default": "light",
+              "oneOf": [
+                { "title": "Light Bulb", "enum": ["light"] }
+              ],
+              "description": "Type of Tapo device"
+            }
+          }
+        }
+      },
+      "pollingInterval": {
+        "title": "Polling Interval (seconds)",
+        "type": "integer",
+        "default": 30,
+        "minimum": 10,
+        "maximum": 300,
+        "description": "How often to poll devices for status updates (10-300 seconds)"
+      }
+    }
+  },
+  "layout": [
+    {
+      "type": "flex",
+      "flex-flow": "row wrap",
+      "items": [
+        "name",
+        {
+          "key": "email",
+          "flex": "1 1 50%"
+        },
+        {
+          "key": "password",
+          "flex": "1 1 50%"
+        }
+      ]
+    },
+    {
+      "key": "devices",
+      "type": "array",
+      "title": "Devices",
+      "items": [
+        "devices[].name",
+        "devices[].ip",
+        "devices[].type"
+      ]
+    },
+    "pollingInterval"
+  ]
+}

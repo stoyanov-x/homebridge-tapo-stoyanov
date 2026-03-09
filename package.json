@@ -1,0 +1,42 @@
+{
+  "name": "homebridge-tapo-stoyanov",
+  "version": "1.0.0",
+  "description": "Homebridge plugin for Tapo smart devices (lights, bulbs) that are not Matter compatible",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "homebridge-plugin",
+    "tapo",
+    "tp-link",
+    "smart-light",
+    "smart-bulb",
+    "L430C"
+  ],
+  "engines": {
+    "node": "^18.17.0 || ^20.9.0",
+    "homebridge": "^1.6.0"
+  },
+  "author": "stoyanov",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stoyanov-x/homebridge-tapo-stoyanov.git"
+  },
+  "bugs": {
+    "url": "https://github.com/stoyanov-x/homebridge-tapo-stoyanov/issues"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "crypto-js": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.1",
+    "@types/node": "^20.10.0",
+    "homebridge": "^1.6.0",
+    "typescript": "^5.3.0"
+  }
+}

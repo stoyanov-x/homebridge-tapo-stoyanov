@@ -1,0 +1,33 @@
+{
+  "bridge": {
+    "name": "Homebridge",
+    "username": "CC:22:3D:E3:CE:30",
+    "port": 51826,
+    "pin": "031-45-154"
+  },
+  "platforms": [
+    {
+      "platform": "TapoStoyanov",
+      "name": "Tapo Platform",
+      "email": "your-tapo-email@example.com",
+      "password": "your-tapo-password",
+      "pollingInterval": 30,
+      "devices": [
+        {
+          "name": "Living Room Light",
+          "ip": "192.168.1.100",
+          "type": "light"
+        },
+        {
+          "name": "Bedroom Light",
+          "ip": "192.168.1.101",
+          "type": "light"
+        }
+      ],
+      "_bridge": {
+        "username": "0E:6F:15:B2:6B:1B",
+        "port": 51827
+      }
+    }
+  ]
+}
