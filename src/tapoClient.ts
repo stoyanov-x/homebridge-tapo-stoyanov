@@ -80,18 +80,18 @@ export class TapoClient {
       }
       this.cookie = cookie;
 
-      // Verify server hash: sha256(remote_seed + local_seed + auth_hash)
+      // Verify server hash: sha256(local_seed + remote_seed + auth_hash) - KLAP v2
       const expectedServerHash = this.sha256(
-        Buffer.concat([remoteSeed, localSeed, authHash])
+        Buffer.concat([localSeed, remoteSeed, authHash])
       );
       
       if (!serverHash.equals(expectedServerHash)) {
         throw new Error('Server hash verification failed - invalid credentials');
       }
 
-      // Step 2: Handshake2 - Send client hash: sha256(local_seed + remote_seed + auth_hash)
+      // Step 2: Handshake2 - Send client hash: sha256(remote_seed + local_seed + auth_hash) - KLAP v2
       const clientHash = this.sha256(
-        Buffer.concat([localSeed, remoteSeed, authHash])
+        Buffer.concat([remoteSeed, localSeed, authHash])
       );
 
       const response2 = await this.httpClient.post('/app/handshake2', clientHash, {
