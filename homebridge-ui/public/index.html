@@ -647,13 +647,13 @@
 
     // Normalize device type from cloud API (SMART.TAPOBULB) to internal type (light)
     function normalizeDeviceType(cloudType) {
-      if (!cloudType) return 'light';
+      if (!cloudType) return 'unknown';
       const typeUpper = cloudType.toUpperCase();
       if (typeUpper.includes('BULB') || typeUpper.includes('LIGHT')) return 'light';
       if (typeUpper.includes('PLUG') || typeUpper.includes('SOCKET')) return 'plug';
       if (typeUpper.includes('STRIP')) return 'strip';
       if (typeUpper.includes('SWITCH')) return 'switch';
-      return 'light';
+      return cloudType; // Return original for unrecognized types
     }
 
     // Listen for discovery progress events

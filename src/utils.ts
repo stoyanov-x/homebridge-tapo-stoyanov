@@ -24,10 +24,11 @@ import {
 /**
  * Normalize device type from cloud API to internal type
  * Maps SMART.TAPOBULB, SMART.TAPOPLUG, etc. to 'light', 'plug', etc.
+ * Returns the original type if not recognized (will trigger unsupported warning)
  */
 export function normalizeDeviceType(cloudType: string | undefined): string {
   if (!cloudType) {
-    return 'light';
+    return 'unknown';
   }
   
   const typeUpper = cloudType.toUpperCase();
@@ -46,8 +47,8 @@ export function normalizeDeviceType(cloudType: string | undefined): string {
     return 'switch';
   }
   
-  // Default to light for unknown Tapo devices
-  return 'light';
+  // Return original type for unrecognized devices - will trigger warning in platform
+  return cloudType;
 }
 
 /**
