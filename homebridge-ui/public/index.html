@@ -519,10 +519,7 @@
 
       try {
         // Call the plugin's discovery endpoint
-        const response = await homebridge.request('/discover', {
-          method: 'POST',
-          body: JSON.stringify({ email, password })
-        });
+        const response = await homebridge.request('/discover', { email, password });
 
         discoveredDevices = response.devices || [];
 
@@ -651,10 +648,7 @@
 
       try {
         // Request the server to encrypt credentials
-        const encryptResponse = await homebridge.request('/encrypt-credentials', {
-          method: 'POST',
-          body: JSON.stringify({ email, password })
-        });
+        const encryptResponse = await homebridge.request('/encrypt-credentials', { email, password });
 
         const config = {
           name: 'Tapo Platform',
