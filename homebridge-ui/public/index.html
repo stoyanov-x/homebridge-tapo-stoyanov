@@ -287,6 +287,46 @@
       color: #e65100;
     }
 
+    .device-status.testing {
+      background: #fff9e6;
+      color: #b38600;
+    }
+
+    .device-status.auth_failed {
+      background: #ffe5e5;
+      color: #c91432;
+    }
+
+    .device-status.timeout {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .device-status.unreachable {
+      background: #f5f5f7;
+      color: #86868b;
+    }
+
+    .btn-test {
+      padding: 4px 10px;
+      font-size: 11px;
+      border-radius: 6px;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      border: 1px solid #d2d2d7;
+      cursor: pointer;
+      margin-left: 8px;
+    }
+
+    .btn-test:hover:not(:disabled) {
+      background: #e5e5e7;
+    }
+
+    .btn-test:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .checkbox-wrapper {
       position: absolute;
       top: 16px;
@@ -413,9 +453,14 @@
         <h2 class="section-title" style="margin: 0;">
           📱 Available Devices
         </h2>
-        <button class="btn btn-secondary" onclick="startOver()" style="padding: 6px 12px; font-size: 12px;">
-          ↩️ Start Over
-        </button>
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-verify-all" class="btn btn-secondary" onclick="verifyAllDevices()" style="padding: 6px 12px; font-size: 12px;">
+            🔍 Verify All
+          </button>
+          <button class="btn btn-secondary" onclick="startOver()" style="padding: 6px 12px; font-size: 12px;">
+            ↩️ Start Over
+          </button>
+        </div>
       </div>
       <p class="section-description">
         Select which devices you want to add to HomeKit
@@ -632,9 +677,49 @@
       }
 
       const emoji = getDeviceEmoji(device.model);
-      const status = device.manual ? 'manual' : (device.online !== false ? 'online' : 'offline');
-      const statusText = device.manual ? 'MANUAL' : (status === 'online' ? 'ONLINE' : 'OFFLINE');
-      const statusIcon = device.manual ? '✎' : (status === 'online' ? '●' : '○');
+      
+      // Determine display status
+      let status = 'online';
+      let statusText = 'ONLINE';
+      let statusIcon = '●';
+      
+      if (device.connectionStatus) {
+        status = device.connectionStatus;
+        switch (device.connectionStatus) {
+          case 'connected':
+            statusText = 'CONNECTED';
+            statusIcon = '✓';
+            break;
+          case 'auth_failed':
+            statusText = 'AUTH FAILED';
+            statusIcon = '✕';
+            break;
+          case 'timeout':
+            statusText = 'TIMEOUT';
+            statusIcon = '⏱';
+            break;
+          case 'unreachable':
+            statusText = 'UNREACHABLE';
+            statusIcon = '⊘';
+            break;
+          case 'testing':
+            statusText = 'TESTING...';
+            statusIcon = '↻';
+            break;
+          case 'error':
+            statusText = 'ERROR';
+            statusIcon = '!';
+            break;
+        }
+      } else if (device.manual) {
+        status = 'manual';
+        statusText = 'MANUAL';
+        statusIcon = '✎';
+      } else if (device.online === false) {
+        status = 'offline';
+        statusText = 'OFFLINE';
+        statusIcon = '○';
+      }
 
       card.innerHTML = `
         <div class="checkbox-wrapper">
@@ -657,20 +742,101 @@
             <span>📍 ${device.ip}</span>
           </div>
           <div class="device-meta-row">
-            <span class="device-status ${status}">
+            <span class="device-status ${status}" id="status-${device.mac}">
               ${statusIcon} ${statusText}
             </span>
+            <button 
+              class="btn-test" 
+              id="btn-test-${device.mac}"
+              onclick="event.stopPropagation(); testDeviceConnection('${device.mac}', '${device.ip}')"
+            >
+              Test
+            </button>
           </div>
+          ${device.connectionMessage ? `<div class="device-meta-row"><small style="color: #86868b;">${device.connectionMessage}</small></div>` : ''}
         </div>
       `;
 
       card.onclick = (e) => {
-        if (e.target.type !== 'checkbox') {
+        if (e.target.type !== 'checkbox' && !e.target.classList.contains('btn-test')) {
           toggleDevice(device.mac);
         }
       };
 
       return card;
+    }
+
+    async function testDeviceConnection(mac, ip) {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      
+      if (!email || !password) {
+        alert('Please enter your TP-Link credentials first');
+        return;
+      }
+      
+      const statusEl = document.getElementById(`status-${mac}`);
+      const btnEl = document.getElementById(`btn-test-${mac}`);
+      
+      // Update to testing state
+      statusEl.className = 'device-status testing';
+      statusEl.innerHTML = '↻ TESTING...';
+      btnEl.disabled = true;
+      btnEl.textContent = '...';
+      
+      try {
+        const result = await homebridge.request('/test-connection', { email, password, ip });
+        
+        // Update device in our list
+        const device = discoveredDevices.find(d => d.mac === mac);
+        if (device) {
+          device.connectionStatus = result.status;
+          device.connectionMessage = result.message;
+          if (result.device) {
+            // Update device info from result
+            device.model = result.device.model || device.model;
+            device.nickname = result.device.nickname || device.nickname;
+          }
+        }
+        
+        // Update UI
+        let statusText, statusIcon;
+        switch (result.status) {
+          case 'connected':
+            statusText = 'CONNECTED';
+            statusIcon = '✓';
+            break;
+          case 'auth_failed':
+            statusText = 'AUTH FAILED';
+            statusIcon = '✕';
+            break;
+          case 'timeout':
+            statusText = 'TIMEOUT';
+            statusIcon = '⏱';
+            break;
+          case 'unreachable':
+            statusText = 'UNREACHABLE';
+            statusIcon = '⊘';
+            break;
+          default:
+            statusText = 'ERROR';
+            statusIcon = '!';
+        }
+        
+        statusEl.className = `device-status ${result.status}`;
+        statusEl.innerHTML = `${statusIcon} ${statusText}`;
+        
+        if (!result.success) {
+          alert(`Connection test failed:\n\n${result.message}`);
+        }
+      } catch (error) {
+        statusEl.className = 'device-status error';
+        statusEl.innerHTML = '! ERROR';
+        alert(`Test failed: ${error.message}`);
+      } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = 'Test';
+      }
     }
 
     function toggleDevice(mac) {
@@ -808,16 +974,31 @@
         return;
       }
 
+      if (!email || !password) {
+        alert('Please enter your TP-Link credentials first to verify the device');
+        return;
+      }
+
       const btn = document.getElementById('btn-add-manual');
       btn.disabled = true;
-      btn.innerHTML = '<span class="loading-spinner"></span> Checking...';
+      btn.innerHTML = '<span class="loading-spinner"></span> Testing connection...';
 
       try {
-        const response = await homebridge.request('/check-device', { email, password, ip, name });
+        // First, test the connection with detailed feedback
+        const testResult = await homebridge.request('/test-connection', { email, password, ip });
 
-        if (response.success && response.device) {
-          discoveredDevices.push(response.device);
-          selectedDeviceIds.add(response.device.mac);
+        if (testResult.success && testResult.device) {
+          // Connection successful, add the device
+          const device = testResult.device;
+          if (name) {
+            device.name = name;
+            device.nickname = name;
+          }
+          device.connectionStatus = 'connected';
+          device.connectionMessage = testResult.message;
+          
+          discoveredDevices.push(device);
+          selectedDeviceIds.add(device.mac);
           renderDevices();
           document.getElementById('device-list').classList.remove('hidden');
           document.getElementById('no-devices').classList.add('hidden');
@@ -826,11 +1007,42 @@
           document.getElementById('manual-ip').value = '';
           document.getElementById('manual-name').value = '';
 
-          alert(`✅ Device added: ${response.device.name} (${response.device.online ? 'online' : 'will be verified at runtime'})`);
+          alert(`✅ Device verified and added: ${device.name}`);
+        } else {
+          // Connection failed - show detailed error and ask if they want to add anyway
+          const addAnyway = confirm(
+            `⚠️ Connection test failed:\n\n${testResult.message}\n\n` +
+            `Status: ${testResult.status.toUpperCase()}\n\n` +
+            `Do you still want to add this device?\n` +
+            `(Note: It will only work if connection issues are resolved.)`
+          );
+
+          if (addAnyway) {
+            const device = {
+              name: name || `Tapo Device (${ip})`,
+              nickname: name || `Tapo Device (${ip})`,
+              ip: ip,
+              mac: `manual-${ip.replace(/\./g, '-')}`,
+              model: 'Unknown',
+              type: 'light',
+              online: false,
+              manual: true,
+              connectionStatus: testResult.status,
+              connectionMessage: testResult.message,
+            };
+            
+            discoveredDevices.push(device);
+            selectedDeviceIds.add(device.mac);
+            renderDevices();
+            document.getElementById('device-list').classList.remove('hidden');
+            document.getElementById('no-devices').classList.add('hidden');
+            document.getElementById('manual-ip').value = '';
+            document.getElementById('manual-name').value = '';
+          }
         }
       } catch (error) {
         console.error('Add manual device error:', error);
-        alert('Failed to add device: ' + error.message);
+        alert('Failed to test device connection:\n\n' + error.message);
       } finally {
         btn.disabled = false;
         btn.innerHTML = 'Add Device';
@@ -860,6 +1072,7 @@
               ...d,
               nickname: d.name,
               online: true, // Assume online for existing devices
+              connectionStatus: null, // Will be verified when user enters credentials
             }));
             selectedDeviceIds = new Set(discoveredDevices.map(d => d.mac));
             
@@ -875,6 +1088,80 @@
         }
       } catch (error) {
         console.error('Failed to load config:', error);
+      }
+    }
+
+    // Verify all devices at once
+    async function verifyAllDevices() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      
+      if (!email || !password) {
+        alert('Please enter your TP-Link credentials first');
+        return;
+      }
+      
+      if (discoveredDevices.length === 0) {
+        alert('No devices to verify');
+        return;
+      }
+      
+      // Mark all devices as testing
+      discoveredDevices.forEach(device => {
+        device.connectionStatus = 'testing';
+      });
+      renderDevices();
+      
+      try {
+        const devicesToVerify = discoveredDevices.map(d => ({
+          ip: d.ip,
+          name: d.name,
+          mac: d.mac,
+        }));
+        
+        const response = await homebridge.request('/verify-devices', {
+          email,
+          password,
+          devices: devicesToVerify,
+        });
+        
+        if (response.success && response.results) {
+          // Update each device with its verification result
+          response.results.forEach(result => {
+            const device = discoveredDevices.find(d => d.mac === result.mac);
+            if (device) {
+              device.connectionStatus = result.result.status;
+              device.connectionMessage = result.result.message;
+              if (result.result.device) {
+                device.model = result.result.device.model || device.model;
+                device.nickname = result.result.device.nickname || device.nickname;
+              }
+            }
+          });
+          
+          renderDevices();
+          
+          // Summary
+          const connected = response.results.filter(r => r.result.success).length;
+          const failed = response.results.length - connected;
+          
+          if (failed === 0) {
+            alert(`✅ All ${connected} device(s) verified successfully!`);
+          } else {
+            alert(`Verification complete:\n✅ ${connected} connected\n❌ ${failed} failed\n\nClick "Test" on individual devices for details.`);
+          }
+        }
+      } catch (error) {
+        console.error('Verify devices error:', error);
+        alert('Failed to verify devices: ' + error.message);
+        
+        // Reset testing status
+        discoveredDevices.forEach(device => {
+          if (device.connectionStatus === 'testing') {
+            device.connectionStatus = null;
+          }
+        });
+        renderDevices();
       }
     }
 

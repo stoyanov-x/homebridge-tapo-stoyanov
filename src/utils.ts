@@ -302,3 +302,132 @@ export async function checkDevice(ip: string, credentials: TapoCredentials): Pro
   
   return null;
 }
+
+/**
+ * Connection test result
+ */
+export interface ConnectionTestResult {
+  success: boolean;
+  status: 'connected' | 'auth_failed' | 'timeout' | 'unreachable' | 'error';
+  message: string;
+  device?: DiscoveredDevice;
+}
+
+/**
+ * Test connection to a specific device with detailed error reporting
+ */
+export async function testConnection(ip: string, credentials: TapoCredentials): Promise<ConnectionTestResult> {
+  try {
+    const client = new TapoClient(ip, credentials);
+    const info = await Promise.race([
+      client.getDeviceInfo(),
+      new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('timeout')), DEVICE_CHECK_TIMEOUT)
+      ),
+    ]);
+
+    if (info) {
+      return {
+        success: true,
+        status: 'connected',
+        message: `Connected to ${info.nickname || info.model}`,
+        device: {
+          name: info.nickname || info.model,
+          nickname: info.nickname,
+          ip: ip,
+          mac: info.mac || `unknown-${ip}`,
+          model: info.model || 'Unknown',
+          type: info.type || 'light',
+          online: true,
+          device_on: info.device_on,
+          hw_ver: info.hw_ver,
+          fw_ver: info.fw_ver,
+        },
+      };
+    }
+
+    return {
+      success: false,
+      status: 'error',
+      message: 'Device responded but returned no data',
+    };
+  } catch (error: any) {
+    const errorMessage = error?.message?.toLowerCase() || '';
+    
+    // Check for authentication errors
+    if (errorMessage.includes('auth') || 
+        errorMessage.includes('401') || 
+        errorMessage.includes('403') ||
+        errorMessage.includes('credential') ||
+        errorMessage.includes('hash verification failed') ||
+        errorMessage.includes('invalid credentials')) {
+      return {
+        success: false,
+        status: 'auth_failed',
+        message: 'Authentication failed - check your TP-Link email and password',
+      };
+    }
+    
+    // Check for status 400 (usually auth related in KLAP)
+    if (errorMessage.includes('400') || errorMessage.includes('handshake')) {
+      return {
+        success: false,
+        status: 'auth_failed',
+        message: 'Authentication failed - invalid credentials or unsupported device',
+      };
+    }
+    
+    // Check for timeout
+    if (errorMessage.includes('timeout')) {
+      return {
+        success: false,
+        status: 'timeout',
+        message: 'Connection timed out - device may be offline or IP is incorrect',
+      };
+    }
+    
+    // Check for network errors
+    if (errorMessage.includes('econnrefused') || 
+        errorMessage.includes('ehostunreach') ||
+        errorMessage.includes('enetunreach') ||
+        errorMessage.includes('enotfound')) {
+      return {
+        success: false,
+        status: 'unreachable',
+        message: 'Device unreachable - check IP address and network connection',
+      };
+    }
+    
+    // Generic error
+    return {
+      success: false,
+      status: 'error',
+      message: `Connection error: ${error?.message || 'Unknown error'}`,
+    };
+  }
+}
+
+/**
+ * Verify multiple devices and return their connection status
+ */
+export async function verifyDevices(
+  devices: Array<{ ip: string; name: string; mac: string }>,
+  credentials: TapoCredentials
+): Promise<Array<{ ip: string; name: string; mac: string; result: ConnectionTestResult }>> {
+  const results: Array<{ ip: string; name: string; mac: string; result: ConnectionTestResult }> = [];
+  
+  // Test devices in parallel with limited concurrency
+  const batchSize = 5;
+  for (let i = 0; i < devices.length; i += batchSize) {
+    const batch = devices.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(async (device) => {
+        const result = await testConnection(device.ip, credentials);
+        return { ...device, result };
+      })
+    );
+    results.push(...batchResults);
+  }
+  
+  return results;
+}

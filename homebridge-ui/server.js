@@ -4,7 +4,7 @@
  */
 
 const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
-const { discoverDevices, checkDevice, encryptCredential, isEncryptionAvailable } = require('../dist/utils');
+const { discoverDevices, checkDevice, testConnection, verifyDevices, encryptCredential, isEncryptionAvailable } = require('../dist/utils');
 
 class PluginUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -95,6 +95,59 @@ class PluginUiServer extends HomebridgePluginUiServer {
         }
       } catch (error) {
         console.error('Check device error:', error);
+        throw error;
+      }
+    });
+
+    // Handle testing connection to a device with detailed error feedback
+    this.onRequest('/test-connection', async (payload) => {
+      try {
+        const { email, password, ip } = payload || {};
+
+        if (!email || !password) {
+          throw new RequestError('Email and password are required', { status: 400 });
+        }
+
+        if (!ip) {
+          throw new RequestError('IP address is required', { status: 400 });
+        }
+
+        // Validate IP format
+        const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+        if (!ipRegex.test(ip)) {
+          throw new RequestError('Invalid IP address format', { status: 400 });
+        }
+
+        const credentials = { email, password };
+        const result = await testConnection(ip, credentials);
+        return result;
+      } catch (error) {
+        console.error('Test connection error:', error);
+        throw error;
+      }
+    });
+
+    // Handle verifying multiple devices at once
+    this.onRequest('/verify-devices', async (payload) => {
+      try {
+        const { email, password, devices } = payload || {};
+
+        if (!email || !password) {
+          throw new RequestError('Email and password are required', { status: 400 });
+        }
+
+        if (!devices || !Array.isArray(devices) || devices.length === 0) {
+          throw new RequestError('Devices array is required', { status: 400 });
+        }
+
+        const credentials = { email, password };
+        const results = await verifyDevices(devices, credentials);
+        return {
+          success: true,
+          results: results,
+        };
+      } catch (error) {
+        console.error('Verify devices error:', error);
         throw error;
       }
     });
