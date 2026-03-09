@@ -7,7 +7,7 @@
  * https://github.com/python-kasa/python-kasa
  */
 
-import axios, { AxiosInstance } from 'axios';
+import * as http from 'http';
 import * as crypto from 'crypto';
 import { TapoDeviceInfo, TapoResponse, TapoCredentials } from './types';
 
@@ -31,7 +31,6 @@ export class TapoClient {
   private readonly port: number = 80;
   private readonly timeout: number = 10000;
   
-  private httpClient: AxiosInstance;
   private session?: KLAPSession;
   private cookie?: string;
   private klapVersion?: KLAPVersion;  // Remember which version worked
@@ -39,13 +38,46 @@ export class TapoClient {
   constructor(ip: string, credentials: TapoCredentials) {
     this.ip = ip;
     this.credentials = credentials;
-    
-    this.httpClient = axios.create({
-      baseURL: `http://${ip}:${this.port}`,
-      timeout: this.timeout,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+  }
+
+  /**
+   * Make an HTTP POST request using native http module
+   */
+  private httpPost(path: string, data: Buffer, headers: Record<string, string> = {}): Promise<{ statusCode: number; data: Buffer; headers: http.IncomingHttpHeaders }> {
+    return new Promise((resolve, reject) => {
+      const options: http.RequestOptions = {
+        hostname: this.ip,
+        port: this.port,
+        path: path,
+        method: 'POST',
+        timeout: this.timeout,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': data.length,
+          ...headers,
+        },
+      };
+
+      const req = http.request(options, (res) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          resolve({
+            statusCode: res.statusCode || 0,
+            data: Buffer.concat(chunks),
+            headers: res.headers,
+          });
+        });
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
+
+      req.write(data);
+      req.end();
     });
   }
 
@@ -92,12 +124,18 @@ export class TapoClient {
       : this.generateAuthHashV2(this.credentials.email, this.credentials.password);
 
     // Step 1: Handshake1 - Send local seed
-    const response1 = await this.httpClient.post('/app/handshake1', localSeed, {
-      headers: { 'Content-Type': 'application/octet-stream' },
-      responseType: 'arraybuffer',
-    });
+    let response1;
+    try {
+      response1 = await this.httpPost('/app/handshake1', localSeed);
+    } catch (error: any) {
+      throw new Error(`Handshake1 network error: ${error.message}`);
+    }
 
-    const handshake1Data = Buffer.from(response1.data);
+    if (response1.statusCode !== 200) {
+      throw new Error(`Handshake1 failed with status ${response1.statusCode}`);
+    }
+
+    const handshake1Data = response1.data;
     
     // Response is: remote_seed (16 bytes) + server_hash (32 bytes)
     if (handshake1Data.length !== 48) {
@@ -107,7 +145,9 @@ export class TapoClient {
     const remoteSeed = handshake1Data.slice(0, 16);
     const serverHash = handshake1Data.slice(16, 48);
     
-    const cookie = response1.headers['set-cookie']?.[0];
+    // Get session cookie
+    const setCookie = response1.headers['set-cookie'];
+    const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
     if (!cookie) {
       throw new Error('No session cookie received from device');
     }
@@ -127,16 +167,15 @@ export class TapoClient {
       ? this.sha256(Buffer.concat([remoteSeed, authHash]))  // v1: remote + auth
       : this.sha256(Buffer.concat([remoteSeed, localSeed, authHash]));  // v2: remote + local + auth
 
-    const response2 = await this.httpClient.post('/app/handshake2', clientHash, {
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'Cookie': cookie,
-      },
-      responseType: 'arraybuffer',
-    });
+    let response2;
+    try {
+      response2 = await this.httpPost('/app/handshake2', clientHash, { 'Cookie': cookie });
+    } catch (error: any) {
+      throw new Error(`Handshake2 network error: ${error.message}`);
+    }
 
-    if (response2.status !== 200) {
-      throw new Error(`Handshake2 failed with status: ${response2.status}`);
+    if (response2.statusCode !== 200) {
+      throw new Error(`Handshake2 failed with status: ${response2.statusCode}`);
     }
 
     // Step 3: Derive session keys (same for both versions)
@@ -210,17 +249,23 @@ export class TapoClient {
     const { encryptedData, seq } = this.encryptRequest(requestJson, this.session);
 
     try {
-      const response = await this.httpClient.post('/app/request', encryptedData, {
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Cookie': this.cookie,
-        },
-        params: { seq },
-        responseType: 'arraybuffer',
+      const response = await this.httpPost(`/app/request?seq=${seq}`, encryptedData, {
+        'Cookie': this.cookie,
       });
 
+      if (response.statusCode === 403) {
+        // Session invalid, clear and retry
+        this.session = undefined;
+        this.cookie = undefined;
+        return this.executeRequest(method, params);
+      }
+
+      if (response.statusCode !== 200) {
+        throw new Error(`Request failed with status ${response.statusCode}`);
+      }
+
       // Decrypt the response
-      const decryptedData = this.decryptResponse(Buffer.from(response.data), this.session);
+      const decryptedData = this.decryptResponse(response.data, this.session);
       const result: TapoResponse = JSON.parse(decryptedData);
 
       if (result.error_code !== 0) {
@@ -230,12 +275,6 @@ export class TapoClient {
       return result;
 
     } catch (error: any) {
-      // Session might be invalid, clear it and retry once
-      if (error.response?.status === 403 && this.session) {
-        this.session = undefined;
-        this.cookie = undefined;
-        return this.executeRequest(method, params);
-      }
       throw error;
     }
   }
