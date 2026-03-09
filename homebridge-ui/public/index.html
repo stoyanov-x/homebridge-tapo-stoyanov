@@ -645,6 +645,17 @@
     let selectedDeviceIds = new Set();
     let storedCredentials = { email: '', password: '' }; // Store credentials for manual device checks
 
+    // Normalize device type from cloud API (SMART.TAPOBULB) to internal type (light)
+    function normalizeDeviceType(cloudType) {
+      if (!cloudType) return 'light';
+      const typeUpper = cloudType.toUpperCase();
+      if (typeUpper.includes('BULB') || typeUpper.includes('LIGHT')) return 'light';
+      if (typeUpper.includes('PLUG') || typeUpper.includes('SOCKET')) return 'plug';
+      if (typeUpper.includes('STRIP')) return 'strip';
+      if (typeUpper.includes('SWITCH')) return 'switch';
+      return 'light';
+    }
+
     // Listen for discovery progress events
     homebridge.addEventListener('discovery_progress', (event) => {
       const statusEl = document.getElementById('discovery-status');
@@ -991,7 +1002,7 @@
         .map(device => ({
           name: device.nickname || device.name || `Tapo ${device.model}`,
           ip: device.ip,
-          type: device.type || 'light',
+          type: normalizeDeviceType(device.type),
           mac: device.mac,
           // Store metadata for display even if slightly outdated
           model: device.model,

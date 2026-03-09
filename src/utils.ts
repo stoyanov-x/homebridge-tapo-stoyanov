@@ -22,6 +22,35 @@ import {
 } from './constants';
 
 /**
+ * Normalize device type from cloud API to internal type
+ * Maps SMART.TAPOBULB, SMART.TAPOPLUG, etc. to 'light', 'plug', etc.
+ */
+export function normalizeDeviceType(cloudType: string | undefined): string {
+  if (!cloudType) {
+    return 'light';
+  }
+  
+  const typeUpper = cloudType.toUpperCase();
+  
+  // Map cloud API types to internal types
+  if (typeUpper.includes('BULB') || typeUpper.includes('LIGHT')) {
+    return 'light';
+  }
+  if (typeUpper.includes('PLUG') || typeUpper.includes('SOCKET')) {
+    return 'plug';
+  }
+  if (typeUpper.includes('STRIP')) {
+    return 'strip';
+  }
+  if (typeUpper.includes('SWITCH')) {
+    return 'switch';
+  }
+  
+  // Default to light for unknown Tapo devices
+  return 'light';
+}
+
+/**
  * Read Homebridge bridge credentials from config.json
  * These are used to derive a unique encryption key per installation
  */
@@ -274,7 +303,7 @@ export async function discoverDevices(credentials: TapoCredentials, logger?: any
               ip: ip,
               mac: info.mac || `unknown-${ip}`,
               model: info.model || 'Unknown',
-              type: info.type || 'light',
+              type: normalizeDeviceType(info.type),
               online: true,
               device_on: info.device_on,
               hw_ver: info.hw_ver,
@@ -332,7 +361,7 @@ export async function checkDevice(ip: string, credentials: TapoCredentials): Pro
         ip: ip,
         mac: info.mac || `unknown-${ip}`,
         model: info.model || 'Unknown',
-        type: info.type || 'light',
+        type: normalizeDeviceType(info.type),
         online: true,
         device_on: info.device_on,
         hw_ver: info.hw_ver,
@@ -381,7 +410,7 @@ export async function testConnection(ip: string, credentials: TapoCredentials): 
           ip: ip,
           mac: info.mac || `unknown-${ip}`,
           model: info.model || 'Unknown',
-          type: info.type || 'light',
+          type: normalizeDeviceType(info.type),
           online: true,
           device_on: info.device_on,
           hw_ver: info.hw_ver,

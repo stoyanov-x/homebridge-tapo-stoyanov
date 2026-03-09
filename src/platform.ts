@@ -16,7 +16,7 @@ import {
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { TapoLightAccessory } from './lightAccessory';
 import { TapoPlatformConfig, TapoDeviceConfig, TapoCredentials } from './types';
-import { getDecryptedCredentials, discoverDevices } from './utils';
+import { getDecryptedCredentials, discoverDevices, normalizeDeviceType } from './utils';
 
 export class TapoPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -165,8 +165,11 @@ export class TapoPlatform implements DynamicPlatformPlugin {
       oldInstance.destroy();
     }
 
+    // Normalize device type from cloud API format (e.g., SMART.TAPOBULB -> light)
+    const normalizedType = normalizeDeviceType(config.type);
+
     // Create new instance based on device type
-    switch (config.type) {
+    switch (normalizedType) {
       case 'light':
         const lightAccessory = new TapoLightAccessory(
           this,
@@ -178,7 +181,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
         break;
 
       default:
-        this.log.warn(`[${config.name}] Unsupported device type: ${config.type}`);
+        this.log.warn(`[${config.name}] Unsupported device type: ${config.type} (normalized: ${normalizedType})`);
     }
   }
 }
