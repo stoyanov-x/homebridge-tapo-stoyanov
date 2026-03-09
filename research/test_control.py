@@ -6,20 +6,47 @@ Test controlling Tapo L430C using executeFunction.
 from pytapo import Tapo
 import json
 import time
-
-DEVICE_IP = "192.168.1.100"  # Change to your device IP
-EMAIL = "your-tapo-email@example.com"
-PASSWORD = "your-tapo-password"
+import sys
+import os
 
 def print_section(title):
     print("\n" + "="*70)
     print(f" {title}")
     print("="*70)
 
+def get_input(prompt, default=None):
+    """Get input from user with optional default value."""
+    if default:
+        value = input(f"{prompt} [{default}]: ").strip()
+        return value if value else default
+    else:
+        value = input(f"{prompt}: ").strip()
+        while not value:
+            print("This field is required.")
+            value = input(f"{prompt}: ").strip()
+        return value
+
+# Get credentials from environment or prompt
+print("="*70)
+print(" Tapo L430C Device Test")
+print("="*70)
+
+DEVICE_IP = os.environ.get('TAPO_DEVICE_IP') or get_input("\nDevice IP address", "192.168.1.100")
+EMAIL = os.environ.get('TAPO_EMAIL') or get_input("Tapo account email")
+PASSWORD = os.environ.get('TAPO_PASSWORD') or get_input("Tapo account password")
+
 # Connect to device
-print("Connecting to device...")
-bulb = Tapo(DEVICE_IP, EMAIL, PASSWORD, controlPort=80)
-print("✓ Connected!\n")
+print("\nConnecting to device...")
+try:
+    bulb = Tapo(DEVICE_IP, EMAIL, PASSWORD, controlPort=80)
+    print("✓ Connected!\n")
+except Exception as e:
+    print(f"✗ Connection failed: {e}")
+    print("\nPlease check:")
+    print("  1. Device IP is correct and reachable")
+    print("  2. Credentials are correct")
+    print("  3. Device is powered on")
+    sys.exit(1)
 
 # Get current state
 print_section("Current Device State")

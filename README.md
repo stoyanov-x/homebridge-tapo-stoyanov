@@ -100,6 +100,16 @@ The plugin implements the KLAP (Key-based Local Authentication Protocol):
 - AES-128-CBC encryption for all communications
 - Session management with automatic re-authentication
 
+## Testing Your Device
+
+Before setting up the Homebridge plugin, you can test if your Tapo device is compatible:
+
+```bash
+./research/test_device.sh
+```
+
+The script will prompt you for your device IP, email, and password, then run comprehensive tests. See [research/README.md](research/README.md) for details.
+
 ## Development
 
 ### Building from Source

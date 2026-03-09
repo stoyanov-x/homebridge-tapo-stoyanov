@@ -13,9 +13,19 @@
 
 - **src/** - TypeScript source code (ready for any modifications)
 - **dist/** - Compiled JavaScript (ready to run with Homebridge)
+- **research/** - Device testing tools and research documentation
 - **README.md** - User documentation
-- **RESEARCH.md** - Technical details about L430C and KLAP protocol
 - **config.sample.json** - Example Homebridge configuration
+
+## Test Your Device First
+
+Before installing the plugin, verify your device works:
+
+```bash
+./research/test_device.sh
+```
+
+This will test your L430C and confirm all features are working.
 
 ## Installation Options
 
