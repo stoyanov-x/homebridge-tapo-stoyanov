@@ -4,7 +4,7 @@
  */
 
 const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
-const { discoverDevices, getDecryptedCredentials, encryptCredential } = require('./dist/utils');
+const { discoverDevices, getDecryptedCredentials, encryptCredential } = require('../dist/utils');
 
 class PluginUiServer extends HomebridgePluginUiServer {
   constructor() {
