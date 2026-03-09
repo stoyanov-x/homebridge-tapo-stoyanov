@@ -150,6 +150,14 @@ export class TapoLightAccessory {
       this.service.updateCharacteristic(this.platform.Characteristic.Hue, this.state.Hue);
       this.service.updateCharacteristic(this.platform.Characteristic.Saturation, this.state.Saturation);
 
+      // Log poll summary
+      this.log.info(
+        `[${this.config.name}] Poll: ${this.state.On ? 'ON' : 'OFF'} ` +
+        `| Brightness: ${this.state.Brightness}% ` +
+        `| Color: ${this.state.Hue}°/${this.state.Saturation}% ` +
+        `| Temp: ${info.color_temp || 0}K`
+      );
+
     } catch (error: any) {
       this.log.debug(`Error updating state for ${this.config.name}:`, error.message);
       throw error;
