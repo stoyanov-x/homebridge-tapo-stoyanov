@@ -87,7 +87,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
    * It should be used to setup event handlers for characteristics and update respective values.
    */
   configureAccessory(accessory: PlatformAccessory) {
-    this.log.info('Loading accessory from cache:', accessory.displayName);
+    this.log.info(`[${accessory.displayName}] Loaded from cache`);
     this.accessories.push(accessory);
   }
 
@@ -108,7 +108,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
 
       if (existingAccessory) {
         // Accessory exists, update it
-        this.log.info('Restoring existing accessory from cache:', existingAccessory.displayName);
+        this.log.info(`[${existingAccessory.displayName}] Restoring from cache`);
         
         // Update accessory context
         existingAccessory.context.device = deviceConfig;
@@ -119,7 +119,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
 
       } else {
         // Create new accessory
-        this.log.info('Adding new accessory:', deviceConfig.name);
+        this.log.info(`[${deviceConfig.name}] Adding new accessory`);
         
         const accessory = new this.api.platformAccessory(deviceConfig.name, uuid);
         accessory.context.device = deviceConfig;
@@ -138,8 +138,9 @@ export class TapoPlatform implements DynamicPlatformPlugin {
     );
 
     if (accessoriesToRemove.length > 0) {
-      this.log.info('Removing unconfigured accessories:', 
-        accessoriesToRemove.map(a => a.displayName).join(', '));
+      for (const acc of accessoriesToRemove) {
+        this.log.info(`[${acc.displayName}] Removing unconfigured accessory`);
+      }
       
       // Cleanup active accessories
       for (const accessory of accessoriesToRemove) {
@@ -177,7 +178,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
         break;
 
       default:
-        this.log.warn(`Unsupported device type: ${config.type} for ${config.name}`);
+        this.log.warn(`[${config.name}] Unsupported device type: ${config.type}`);
     }
   }
 }
