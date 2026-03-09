@@ -705,6 +705,10 @@
       // Store credentials for later use (manual device checks, saving)
       storedCredentials = { email, password };
 
+      // Show logged-in badge
+      document.getElementById('logged-in-email').textContent = email;
+      document.getElementById('logged-in-badge').classList.remove('hidden');
+
       // Hide error and disable button
       hideError('credentials-error');
       const btnDiscover = document.getElementById('btn-discover');
@@ -1036,6 +1040,10 @@
       discoveredDevices = [];
       selectedDeviceIds = new Set();
       storedCredentials = { email: '', password: '' };
+
+      // Hide logged-in badge
+      document.getElementById('logged-in-badge').classList.add('hidden');
+      document.getElementById('logged-in-email').textContent = '';
 
       // Show credentials, hide all other steps
       document.getElementById('step-credentials').classList.remove('hidden');
