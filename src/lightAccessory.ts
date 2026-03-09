@@ -13,6 +13,17 @@ import {
 import { TapoPlatform } from './platform';
 import { TapoClient } from './tapoClient';
 import { TapoDeviceConfig, TapoDeviceInfo } from './types';
+import {
+  DEFAULT_POLLING_INTERVAL,
+  DEVICE_MANUFACTURER,
+  DEVICE_MODEL,
+  DEFAULT_COLOR_TEMP_RANGE,
+  DEFAULT_BRIGHTNESS,
+  DEFAULT_COLOR_TEMP_MIRED,
+  DEFAULT_HUE,
+  DEFAULT_SATURATION,
+  COLOR_UPDATE_BATCH_DELAY,
+} from './constants';
 
 export class TapoLightAccessory {
   private service: Service;
@@ -22,14 +33,14 @@ export class TapoLightAccessory {
   // Current state cache
   private state = {
     On: false,
-    Brightness: 100,
-    ColorTemperature: 140, // HomeKit uses Mired (1,000,000/Kelvin)
-    Hue: 0,
-    Saturation: 0,
+    Brightness: DEFAULT_BRIGHTNESS,
+    ColorTemperature: DEFAULT_COLOR_TEMP_MIRED, // HomeKit uses Mired (1,000,000/Kelvin)
+    Hue: DEFAULT_HUE,
+    Saturation: DEFAULT_SATURATION,
   };
 
   // Device capabilities
-  private colorTempRange: [number, number] = [2500, 6500];
+  private colorTempRange: [number, number] = DEFAULT_COLOR_TEMP_RANGE;
 
   constructor(
     private readonly platform: TapoPlatform,
@@ -42,8 +53,8 @@ export class TapoLightAccessory {
 
     // Set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'TP-Link')
-      .setCharacteristic(this.platform.Characteristic.Model, 'L430C')
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, DEVICE_MANUFACTURER)
+      .setCharacteristic(this.platform.Characteristic.Model, DEVICE_MODEL)
       .setCharacteristic(this.platform.Characteristic.SerialNumber, config.ip.replace(/\./g, '-'));
 
     // Get or create the Lightbulb service
@@ -90,7 +101,7 @@ export class TapoLightAccessory {
       await this.updateDeviceState();
       
       // Start polling for state updates
-      const pollingInterval = (this.platform.config.pollingInterval || 30) * 1000;
+      const pollingInterval = (this.platform.config.pollingInterval || DEFAULT_POLLING_INTERVAL) * 1000;
       this.updateInterval = setInterval(() => {
         this.updateDeviceState().catch(err => {
           this.log.error(`Error updating ${this.config.name}:`, err.message);
@@ -284,7 +295,7 @@ export class TapoLightAccessory {
       } catch (error: any) {
         this.log.error(`Error setting color for ${this.config.name}:`, error.message);
       }
-    }, 100);
+    }, COLOR_UPDATE_BATCH_DELAY);
   }
 
   /**
