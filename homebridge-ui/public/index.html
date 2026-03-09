@@ -567,6 +567,7 @@
     
     let discoveredDevices = [];
     let selectedDeviceIds = new Set();
+    let storedCredentials = { email: '', password: '' }; // Store credentials for manual device checks
 
     // Listen for discovery progress events
     homebridge.addEventListener('discovery_progress', (event) => {
@@ -612,6 +613,9 @@
         return;
       }
 
+      // Store credentials for later use (manual device checks, saving)
+      storedCredentials = { email, password };
+
       // Hide error and disable button
       hideError('credentials-error');
       const btnDiscover = document.getElementById('btn-discover');
@@ -640,6 +644,8 @@
         }
 
         // Always show manual entry, settings, and save after discovery
+        // Hide credentials section to reduce clutter
+        document.getElementById('step-credentials').classList.add('hidden');
         document.getElementById('step-manual').classList.remove('hidden');
         document.getElementById('step-settings').classList.remove('hidden');
         document.getElementById('save-section').classList.remove('hidden');
@@ -855,8 +861,7 @@
     }
 
     async function saveConfig() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
+      const { email, password } = storedCredentials;
       const pollingInterval = parseInt(document.getElementById('polling-interval').value) || 30;
 
       // Get selected devices
@@ -872,6 +877,11 @@
 
       if (selectedDevices.length === 0) {
         showError('discovery-error', 'Please select at least one device');
+        return;
+      }
+
+      if (!email || !password) {
+        alert('Credentials not available. Please run device discovery first.');
         return;
       }
 
@@ -923,8 +933,10 @@
       // Reset state
       discoveredDevices = [];
       selectedDeviceIds = new Set();
+      storedCredentials = { email: '', password: '' };
 
-      // Hide all steps except credentials
+      // Show credentials, hide all other steps
+      document.getElementById('step-credentials').classList.remove('hidden');
       document.getElementById('step-discovery').classList.add('hidden');
       document.getElementById('step-manual').classList.add('hidden');
       document.getElementById('step-settings').classList.add('hidden');
@@ -953,8 +965,7 @@
     async function addManualDevice() {
       const ip = document.getElementById('manual-ip').value.trim();
       const name = document.getElementById('manual-name').value.trim();
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
+      const { email, password } = storedCredentials;
 
       if (!ip) {
         alert('Please enter an IP address');
@@ -975,7 +986,7 @@
       }
 
       if (!email || !password) {
-        alert('Please enter your TP-Link credentials first to verify the device');
+        alert('Please run device discovery first to enter your credentials');
         return;
       }
 
@@ -1076,7 +1087,8 @@
             }));
             selectedDeviceIds = new Set(discoveredDevices.map(d => d.mac));
             
-            // Show device list directly
+            // Hide credentials, show device list directly
+            document.getElementById('step-credentials').classList.add('hidden');
             renderDevices();
             document.getElementById('step-discovery').classList.remove('hidden');
             document.getElementById('device-list').classList.remove('hidden');
