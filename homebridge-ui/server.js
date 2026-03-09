@@ -32,7 +32,7 @@ class PluginUiServer extends HomebridgePluginUiServer {
             console.log(`[Tapo Discovery] ${msg}`);
             this.pushEvent('discovery_progress', { message: msg });
           },
-          debug: (msg) => console.debug(`[Tapo Discovery] ${msg}`),
+          warn: (msg) => console.warn(`[Tapo Discovery] ${msg}`),
         }, (status) => {
           this.pushEvent('discovery_progress', { message: status });
         });

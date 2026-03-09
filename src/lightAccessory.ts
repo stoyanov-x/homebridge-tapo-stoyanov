@@ -159,7 +159,7 @@ export class TapoLightAccessory {
       );
 
     } catch (error: any) {
-      this.log.debug(`Error updating state for ${this.config.name}:`, error.message);
+      this.log.warn(`Error updating state for ${this.config.name}:`, error.message);
       throw error;
     }
   }

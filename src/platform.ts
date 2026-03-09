@@ -51,7 +51,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
     try {
       const storagePath = this.api.user.storagePath();
       this.credentials = getDecryptedCredentials(this.config, storagePath);
-      this.log.debug('Credentials loaded successfully');
+      this.log.info('Credentials loaded successfully');
     } catch (error) {
       this.log.error('Failed to decrypt credentials:', error);
       this.credentials = { email: '', password: '' };
@@ -63,14 +63,13 @@ export class TapoPlatform implements DynamicPlatformPlugin {
       return;
     }
 
-    this.log.debug('Finished initializing platform:', this.config.name || 'Tapo Platform');
+    this.log.info('Platform initialized:', this.config.name || 'Tapo Platform');
 
     // Setup custom UI server for device discovery
     this.setupCustomUIServer();
 
     // When Homebridge finishes loading cached accessories, discover devices
     this.api.on('didFinishLaunching', () => {
-      this.log.debug('Executed didFinishLaunching callback');
       this.discoverDevices();
     });
   }
@@ -79,12 +78,8 @@ export class TapoPlatform implements DynamicPlatformPlugin {
    * Setup custom UI server endpoints
    */
   private setupCustomUIServer() {
-    // Register discovery endpoint
-    this.api.on('didFinishLaunching', () => {
-      // The custom UI will make POST requests to /discover
-      // Homebridge Config UI X handles this automatically with customUi: true
-      this.log.debug('Custom UI server ready for device discovery');
-    });
+    // The custom UI makes POST requests to /discover
+    // Homebridge Config UI X handles this automatically with customUi: true
   }
 
   /**
