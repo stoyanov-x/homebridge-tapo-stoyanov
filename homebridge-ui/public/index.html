@@ -773,8 +773,9 @@
     }
 
     async function testDeviceConnection(mac, ip) {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
+      // Use stored credentials (input fields are hidden after discovery)
+      const email = storedCredentials.email || document.getElementById('email').value.trim();
+      const password = storedCredentials.password || document.getElementById('password').value;
       
       if (!email || !password) {
         alert('Please enter your TP-Link credentials first');

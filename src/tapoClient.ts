@@ -145,12 +145,14 @@ export class TapoClient {
     const remoteSeed = handshake1Data.slice(0, 16);
     const serverHash = handshake1Data.slice(16, 48);
     
-    // Get session cookie
+    // Get session cookie - parse only the key=value, ignoring attributes
     const setCookie = response1.headers['set-cookie'];
-    const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-    if (!cookie) {
+    const rawCookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+    if (!rawCookie) {
       throw new Error('No session cookie received from device');
     }
+    // Extract just the cookie key=value part (before any semicolons)
+    const cookie = rawCookie.split(';')[0].trim();
     this.cookie = cookie;
 
     // Calculate expected server hash based on version
