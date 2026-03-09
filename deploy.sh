@@ -30,6 +30,31 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# Run a command with error handling
+run_step() {
+    local step_name="$1"
+    shift
+    log_info "$step_name..."
+    if ! "$@"; then
+        log_error "$step_name failed!"
+        exit 1
+    fi
+}
+
+# Build the plugin (install, compile, pack)
+build_plugin() {
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    cd "$script_dir"
+    
+    log_info "Building plugin..."
+    
+    run_step "Installing dependencies" pnpm install
+    run_step "Compiling TypeScript" pnpm run build
+    run_step "Creating package" pnpm pack
+    
+    log_info "Build complete!"
+}
+
 # Find the latest .tgz file by semver (largest version number)
 find_latest_tgz() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -57,6 +82,9 @@ find_container() {
 # Main deployment
 main() {
     log_info "Starting deployment to $REMOTE_HOST..."
+    
+    # Step 0: Build the plugin
+    build_plugin
     
     # Step 1: Find the latest .tgz
     local tgz_file=$(find_latest_tgz)
