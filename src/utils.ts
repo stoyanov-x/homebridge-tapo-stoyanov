@@ -5,9 +5,15 @@
 import * as crypto from 'crypto';
 import { TapoClient } from './tapoClient';
 import { TapoCredentials, DiscoveredDevice } from './types';
-
-const ENCRYPTION_ALGORITHM = 'aes-256-gcm';
-const ENCRYPTION_KEY = 'tapo-stoyanov-plugin-encryption-key-2026-v1'; // Fixed key for simplicity
+import {
+  ENCRYPTION_ALGORITHM,
+  ENCRYPTION_KEY,
+  DEFAULT_FALLBACK_SUBNETS,
+  NETWORK_SCAN_RANGE,
+  NETWORK_SCAN_BATCH_SIZE,
+  DEVICE_SCAN_TIMEOUT,
+  DEVICE_CHECK_TIMEOUT,
+} from './constants';
 
 /**
  * Encrypt a credential string
@@ -101,7 +107,7 @@ function getLocalSubnets(): string[] {
 
   // Fallback to common subnets if none found
   if (subnets.length === 0) {
-    subnets.push('192.168.1', '192.168.0', '10.0.0');
+    subnets.push(...DEFAULT_FALLBACK_SUBNETS);
   }
 
   return subnets;
@@ -115,7 +121,7 @@ export async function discoverDevices(credentials: TapoCredentials, logger?: any
   const devices: DiscoveredDevice[] = [];
   
   const subnets = getLocalSubnets();
-  const scanRange = 254; // Scan .1 to .254
+  const scanRange = NETWORK_SCAN_RANGE;
   
   const log = logger || console;
   log.info?.(`Detected subnets: ${subnets.join(', ')}`);
@@ -126,7 +132,7 @@ export async function discoverDevices(credentials: TapoCredentials, logger?: any
     progressCallback?.(`Scanning ${subnet}.0/24...`);
 
     // Scan in batches to avoid overwhelming the network
-    const batchSize = 20;
+    const batchSize = NETWORK_SCAN_BATCH_SIZE;
     const promises: Promise<void>[] = [];
 
     for (let i = 1; i <= scanRange; i++) {
@@ -138,7 +144,7 @@ export async function discoverDevices(credentials: TapoCredentials, logger?: any
           const info = await Promise.race([
             client.getDeviceInfo(),
             new Promise<never>((_, reject) => 
-              setTimeout(() => reject(new Error('timeout')), 2000)
+              setTimeout(() => reject(new Error('timeout')), DEVICE_SCAN_TIMEOUT)
             ),
           ]);
 
@@ -195,7 +201,7 @@ export async function checkDevice(ip: string, credentials: TapoCredentials): Pro
     const info = await Promise.race([
       client.getDeviceInfo(),
       new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('timeout')), 3000)
+        setTimeout(() => reject(new Error('timeout')), DEVICE_CHECK_TIMEOUT)
       ),
     ]);
 
