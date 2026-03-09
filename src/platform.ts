@@ -16,7 +16,7 @@ import {
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { TapoLightAccessory } from './lightAccessory';
 import { TapoPlatformConfig, TapoDeviceConfig, TapoCredentials } from './types';
-import { getDecryptedCredentials, discoverDevices, normalizeDeviceType } from './utils';
+import { getDecryptedCredentials, normalizeDeviceType } from './utils';
 
 export class TapoPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
