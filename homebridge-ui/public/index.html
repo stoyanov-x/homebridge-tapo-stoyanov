@@ -845,7 +845,7 @@
           <div class="device-icon">${emoji}</div>
           <div class="device-info">
             <h3 class="device-name">${device.nickname || device.name || 'Unnamed Device'}</h3>
-            <p class="device-model">${device.model || 'Unknown Model'}</p>
+            <p class="device-model">${(device.model && device.model !== 'Unknown') ? device.model : ''}</p>
           </div>
         </div>
         <div class="device-meta">
@@ -879,12 +879,20 @@
 
     async function testDeviceConnection(mac, ip) {
       // Use stored credentials (input fields are hidden after discovery)
-      const email = storedCredentials.email || document.getElementById('email').value.trim();
-      const password = storedCredentials.password || document.getElementById('password').value;
+      let email = storedCredentials.email || document.getElementById('email').value.trim();
+      let password = storedCredentials.password || document.getElementById('password').value;
       
       if (!email || !password) {
-        alert('Please enter your TP-Link credentials first');
-        return;
+        // Prompt user for credentials if not available
+        email = prompt('Enter your TP-Link email address:');
+        if (!email) return;
+        password = prompt('Enter your TP-Link password:');
+        if (!password) return;
+        
+        // Store for future use
+        storedCredentials = { email, password };
+        document.getElementById('logged-in-email').textContent = email;
+        document.getElementById('logged-in-badge').classList.remove('hidden');
       }
       
       const statusEl = document.getElementById(`status-${mac}`);
@@ -908,35 +916,17 @@
             // Update device info from result
             device.model = result.device.model || device.model;
             device.nickname = result.device.nickname || device.nickname;
+            device.hw_ver = result.device.hw_ver || device.hw_ver;
+            device.fw_ver = result.device.fw_ver || device.fw_ver;
           }
         }
         
-        // Update UI
-        let statusText, statusIcon;
-        switch (result.status) {
-          case 'connected':
-            statusText = 'CONNECTED';
-            statusIcon = '✓';
-            break;
-          case 'auth_failed':
-            statusText = 'AUTH FAILED';
-            statusIcon = '✕';
-            break;
-          case 'timeout':
-            statusText = 'TIMEOUT';
-            statusIcon = '⏱';
-            break;
-          case 'unreachable':
-            statusText = 'UNREACHABLE';
-            statusIcon = '⊘';
-            break;
-          default:
-            statusText = 'ERROR';
-            statusIcon = '!';
+        // Re-render the entire card to show updated model and icon
+        const oldCard = document.getElementById(`device-${mac}`);
+        if (oldCard && device) {
+          const newCard = createDeviceCard(device);
+          oldCard.replaceWith(newCard);
         }
-        
-        statusEl.className = `device-status ${result.status}`;
-        statusEl.innerHTML = `${statusIcon} ${statusText}`;
         
         if (!result.success) {
           alert(`Connection test failed:\n\n${result.message}`);
@@ -946,8 +936,11 @@
         statusEl.innerHTML = '! ERROR';
         alert(`Test failed: ${error.message}`);
       } finally {
-        btnEl.disabled = false;
-        btnEl.textContent = 'Test';
+        const btnElFinal = document.getElementById(`btn-test-${mac}`);
+        if (btnElFinal) {
+          btnElFinal.disabled = false;
+          btnElFinal.textContent = 'Test';
+        }
       }
     }
 
@@ -967,7 +960,7 @@
     }
 
     async function saveConfig() {
-      const { email, password } = storedCredentials;
+      let { email, password } = storedCredentials;
       const pollingInterval = parseInt(document.getElementById('polling-interval').value) || 30;
 
       // Get selected devices
@@ -987,8 +980,16 @@
       }
 
       if (!email || !password) {
-        alert('Credentials not available. Please run device discovery first.');
-        return;
+        // Prompt user for credentials if not available
+        email = prompt('Enter your TP-Link email address to save:');
+        if (!email) return;
+        password = prompt('Enter your TP-Link password:');
+        if (!password) return;
+        
+        // Store for future use
+        storedCredentials = { email, password };
+        document.getElementById('logged-in-email').textContent = email;
+        document.getElementById('logged-in-badge').classList.remove('hidden');
       }
 
       const btnSave = document.getElementById('btn-save');
@@ -1223,12 +1224,20 @@
 
     // Verify all devices at once
     async function verifyAllDevices() {
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
+      let email = storedCredentials.email || document.getElementById('email').value.trim();
+      let password = storedCredentials.password || document.getElementById('password').value;
       
       if (!email || !password) {
-        alert('Please enter your TP-Link credentials first');
-        return;
+        // Prompt user for credentials if not available
+        email = prompt('Enter your TP-Link email address:');
+        if (!email) return;
+        password = prompt('Enter your TP-Link password:');
+        if (!password) return;
+        
+        // Store for future use
+        storedCredentials = { email, password };
+        document.getElementById('logged-in-email').textContent = email;
+        document.getElementById('logged-in-badge').classList.remove('hidden');
       }
       
       if (discoveredDevices.length === 0) {
