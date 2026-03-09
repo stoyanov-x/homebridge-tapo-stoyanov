@@ -104,13 +104,13 @@ export class TapoLightAccessory {
       const pollingInterval = (this.platform.config.pollingInterval || DEFAULT_POLLING_INTERVAL) * 1000;
       this.updateInterval = setInterval(() => {
         this.updateDeviceState().catch(err => {
-          this.log.error(`Error updating ${this.config.name}:`, err.message);
+          this.log.error(`[${this.config.name}] Poll error:`, err.message);
         });
       }, pollingInterval);
 
-      this.log.info(`Initialized ${this.config.name} at ${this.config.ip}`);
+      this.log.info(`[${this.config.name}] Initialized at ${this.config.ip}`);
     } catch (error: any) {
-      this.log.error(`Failed to initialize ${this.config.name}:`, error.message);
+      this.log.error(`[${this.config.name}] Init failed:`, error.message);
     }
   }
 
@@ -152,14 +152,14 @@ export class TapoLightAccessory {
 
       // Log poll summary
       this.log.info(
-        `[${this.config.name}] Poll: ${this.state.On ? 'ON' : 'OFF'} ` +
-        `| Brightness: ${this.state.Brightness}% ` +
-        `| Color: ${this.state.Hue}°/${this.state.Saturation}% ` +
-        `| Temp: ${info.color_temp || 0}K`
+        `[${this.config.name}] ${this.state.On ? 'ON' : 'OFF'} ` +
+        `${this.state.Brightness}% ` +
+        `H${this.state.Hue}° S${this.state.Saturation}% ` +
+        `${info.color_temp || 0}K`
       );
 
     } catch (error: any) {
-      this.log.warn(`Error updating state for ${this.config.name}:`, error.message);
+      this.log.warn(`[${this.config.name}] Poll failed:`, error.message);
       throw error;
     }
   }
@@ -178,9 +178,9 @@ export class TapoLightAccessory {
       }
       
       this.state.On = on;
-      this.log.info(`Set ${this.config.name} power to ${on ? 'ON' : 'OFF'}`);
+      this.log.info(`[${this.config.name}] Power: ${on ? 'ON' : 'OFF'}`);
     } catch (error: any) {
-      this.log.error(`Error setting power for ${this.config.name}:`, error.message);
+      this.log.error(`[${this.config.name}] Power error:`, error.message);
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
@@ -201,9 +201,9 @@ export class TapoLightAccessory {
     try {
       await this.client.setBrightness(brightness);
       this.state.Brightness = brightness;
-      this.log.info(`Set ${this.config.name} brightness to ${brightness}%`);
+      this.log.info(`[${this.config.name}] Brightness: ${brightness}%`);
     } catch (error: any) {
-      this.log.error(`Error setting brightness for ${this.config.name}:`, error.message);
+      this.log.error(`[${this.config.name}] Brightness error:`, error.message);
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
@@ -233,9 +233,9 @@ export class TapoLightAccessory {
       
       await this.client.setColorTemperature(clampedKelvin);
       this.state.ColorTemperature = mired;
-      this.log.info(`Set ${this.config.name} color temperature to ${clampedKelvin}K`);
+      this.log.info(`[${this.config.name}] Color temp: ${clampedKelvin}K`);
     } catch (error: any) {
-      this.log.error(`Error setting color temperature for ${this.config.name}:`, error.message);
+      this.log.error(`[${this.config.name}] Color temp error:`, error.message);
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
@@ -299,9 +299,9 @@ export class TapoLightAccessory {
     this.colorUpdateTimeout = setTimeout(async () => {
       try {
         await this.client.setColor(this.state.Hue, this.state.Saturation);
-        this.log.info(`Set ${this.config.name} color to H:${this.state.Hue} S:${this.state.Saturation}`);
+        this.log.info(`[${this.config.name}] Color: H${this.state.Hue}° S${this.state.Saturation}%`);
       } catch (error: any) {
-        this.log.error(`Error setting color for ${this.config.name}:`, error.message);
+        this.log.error(`[${this.config.name}] Color error:`, error.message);
       }
     }, COLOR_UPDATE_BATCH_DELAY);
   }
@@ -319,6 +319,6 @@ export class TapoLightAccessory {
     }
     
     this.client.close();
-    this.log.info(`Removed ${this.config.name}`);
+    this.log.info(`[${this.config.name}] Removed`);
   }
 }
