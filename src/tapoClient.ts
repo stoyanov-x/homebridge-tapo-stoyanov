@@ -1,20 +1,24 @@
 /**
  * Tapo Device Client
  * Handles communication with Tapo devices using the KLAP protocol
+ * 
+ * KLAP v2 Protocol Implementation based on python-kasa library
+ * https://github.com/python-kasa/python-kasa
  */
 
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
-import * as CryptoJS from 'crypto-js';
 import { TapoDeviceInfo, TapoResponse, TapoCredentials } from './types';
 
 interface KLAPSession {
   localSeed: Buffer;
-  remoteSeed?: Buffer;
-  userHash?: Buffer;
-  sessionKey?: Buffer;
-  timeout?: number;
-  ivSeq: number;
+  remoteSeed: Buffer;
+  authHash: Buffer;
+  key: Buffer;       // AES key (16 bytes)
+  iv: Buffer;        // Base IV (12 bytes)
+  sig: Buffer;       // Signature key (28 bytes)
+  seq: number;       // Sequence number (signed 32-bit)
+  timeout: number;   // Session expiry timestamp
 }
 
 export class TapoClient {
@@ -41,37 +45,56 @@ export class TapoClient {
   }
 
   /**
-   * Authenticate with the device using KLAP protocol
+   * Authenticate with the device using KLAP v2 protocol
    */
   private async authenticate(): Promise<void> {
     try {
-      // Step 1: Handshake1 - Send local seed
+      // Generate local seed (16 random bytes)
       const localSeed = crypto.randomBytes(16);
+      
+      // Calculate auth hash: sha256(sha1(username) + sha1(password))
+      const authHash = this.generateAuthHash(
+        this.credentials.email,
+        this.credentials.password
+      );
+
+      // Step 1: Handshake1 - Send local seed
       const response1 = await this.httpClient.post('/app/handshake1', localSeed, {
         headers: { 'Content-Type': 'application/octet-stream' },
         responseType: 'arraybuffer',
       });
 
-      const remoteSeed = Buffer.from(response1.data);
-      const cookie = response1.headers['set-cookie']?.[0];
+      const handshake1Data = Buffer.from(response1.data);
       
+      // Response is: remote_seed (16 bytes) + server_hash (32 bytes)
+      if (handshake1Data.length !== 48) {
+        throw new Error(`Invalid handshake1 response length: ${handshake1Data.length}`);
+      }
+      
+      const remoteSeed = handshake1Data.slice(0, 16);
+      const serverHash = handshake1Data.slice(16, 48);
+      
+      const cookie = response1.headers['set-cookie']?.[0];
       if (!cookie) {
         throw new Error('No session cookie received from device');
       }
-      
       this.cookie = cookie;
 
-      // Step 2: Calculate authentication hash
-      const authHash = this.sha256(
-        this.sha256(`${this.credentials.email}${this.credentials.password}`)
+      // Verify server hash: sha256(remote_seed + local_seed + auth_hash)
+      const expectedServerHash = this.sha256(
+        Buffer.concat([remoteSeed, localSeed, authHash])
       );
+      
+      if (!serverHash.equals(expectedServerHash)) {
+        throw new Error('Server hash verification failed - invalid credentials');
+      }
 
-      // Step 3: Handshake2 - Send authentication
-      const localSeedAuthHash = this.sha256(
+      // Step 2: Handshake2 - Send client hash: sha256(local_seed + remote_seed + auth_hash)
+      const clientHash = this.sha256(
         Buffer.concat([localSeed, remoteSeed, authHash])
       );
 
-      const response2 = await this.httpClient.post('/app/handshake2', localSeedAuthHash, {
+      const response2 = await this.httpClient.post('/app/handshake2', clientHash, {
         headers: {
           'Content-Type': 'application/octet-stream',
           'Cookie': cookie,
@@ -79,33 +102,49 @@ export class TapoClient {
         responseType: 'arraybuffer',
       });
 
-      // Verify remote seed auth hash
-      const remoteSeedAuthHash = Buffer.from(response2.data);
-      const expectedHash = this.sha256(
-        Buffer.concat([remoteSeed, localSeed, authHash])
-      );
-
-      if (!remoteSeedAuthHash.equals(expectedHash)) {
-        throw new Error('Authentication verification failed');
+      if (response2.status !== 200) {
+        throw new Error(`Handshake2 failed with status: ${response2.status}`);
       }
 
-      // Step 4: Calculate session keys
-      const sessionKey = this.sha256(
-        Buffer.concat([Buffer.from('lsk'), localSeed, remoteSeed, authHash])
-      );
+      // Step 3: Derive session keys
+      // Key: sha256("lsk" + local_seed + remote_seed + auth_hash)[:16]
+      const keyPayload = Buffer.concat([Buffer.from('lsk'), localSeed, remoteSeed, authHash]);
+      const key = this.sha256(keyPayload).slice(0, 16);
+      
+      // IV: sha256("iv" + local_seed + remote_seed + auth_hash)
+      // First 12 bytes are base IV, last 4 bytes are initial seq (signed big-endian)
+      const ivPayload = Buffer.concat([Buffer.from('iv'), localSeed, remoteSeed, authHash]);
+      const fullIv = this.sha256(ivPayload);
+      const iv = fullIv.slice(0, 12);
+      const seq = fullIv.readInt32BE(28);
+      
+      // Signature key: sha256("ldk" + local_seed + remote_seed + auth_hash)[:28]
+      const sigPayload = Buffer.concat([Buffer.from('ldk'), localSeed, remoteSeed, authHash]);
+      const sig = this.sha256(sigPayload).slice(0, 28);
 
       this.session = {
         localSeed,
         remoteSeed,
-        userHash: authHash,
-        sessionKey,
+        authHash,
+        key,
+        iv,
+        sig,
+        seq,
         timeout: Date.now() + 86400000, // 24 hours
-        ivSeq: 0,
       };
 
     } catch (error: any) {
       throw new Error(`Authentication failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Generate KLAP v2 auth hash: sha256(sha1(username) + sha1(password))
+   */
+  private generateAuthHash(username: string, password: string): Buffer {
+    const usernameHash = crypto.createHash('sha1').update(username).digest();
+    const passwordHash = crypto.createHash('sha1').update(password).digest();
+    return this.sha256(Buffer.concat([usernameHash, passwordHash]));
   }
 
   /**
@@ -225,25 +264,30 @@ export class TapoClient {
   }
 
   /**
-   * Encrypt request data
+   * Encrypt request data using KLAP v2 encryption
    */
   private encryptRequest(data: string, session: KLAPSession): { encryptedData: Buffer; seq: number } {
-    if (!session.sessionKey) {
-      throw new Error('No session key available');
-    }
-
-    const seq = session.ivSeq++;
-    const iv = this.generateIV(seq, session.sessionKey);
-    const cipher = crypto.createCipheriv('aes-128-cbc', session.sessionKey.slice(0, 16), iv);
+    // Increment sequence number
+    session.seq += 1;
+    const seq = session.seq;
+    
+    // Generate full IV: base_iv (12 bytes) + seq (4 bytes, signed big-endian)
+    const seqBytes = Buffer.alloc(4);
+    seqBytes.writeInt32BE(seq, 0);
+    const iv = Buffer.concat([session.iv, seqBytes]);
+    
+    // Encrypt with AES-128-CBC and PKCS7 padding
+    const cipher = crypto.createCipheriv('aes-128-cbc', session.key, iv);
+    const dataBuffer = Buffer.from(data, 'utf8');
     
     const encrypted = Buffer.concat([
-      cipher.update(data, 'utf8'),
+      cipher.update(dataBuffer),
       cipher.final(),
     ]);
 
-    // Add signature
+    // Generate signature: sha256(sig_key + seq + ciphertext)
     const signature = this.sha256(
-      Buffer.concat([session.sessionKey.slice(0, 16), encrypted])
+      Buffer.concat([session.sig, seqBytes, encrypted])
     );
 
     return {
@@ -253,33 +297,23 @@ export class TapoClient {
   }
 
   /**
-   * Decrypt response data
+   * Decrypt response data using KLAP v2 decryption
    */
   private decryptResponse(data: Buffer, session: KLAPSession): string {
-    if (!session.sessionKey) {
-      throw new Error('No session key available');
-    }
-
-    // Extract signature and payload
+    // Extract signature (32 bytes) and ciphertext
     const signature = data.slice(0, 32);
-    const payload = data.slice(32);
-
-    // Verify signature
-    const expectedSignature = this.sha256(
-      Buffer.concat([session.sessionKey.slice(0, 16), payload])
-    );
-
-    if (!signature.equals(expectedSignature)) {
-      throw new Error('Response signature verification failed');
-    }
-
-    // Decrypt payload
-    const seq = session.ivSeq - 1;
-    const iv = this.generateIV(seq, session.sessionKey);
-    const decipher = crypto.createDecipheriv('aes-128-cbc', session.sessionKey.slice(0, 16), iv);
+    const ciphertext = data.slice(32);
+    
+    // Generate full IV for current seq
+    const seqBytes = Buffer.alloc(4);
+    seqBytes.writeInt32BE(session.seq, 0);
+    const iv = Buffer.concat([session.iv, seqBytes]);
+    
+    // Decrypt with AES-128-CBC
+    const decipher = crypto.createDecipheriv('aes-128-cbc', session.key, iv);
     
     const decrypted = Buffer.concat([
-      decipher.update(payload),
+      decipher.update(ciphertext),
       decipher.final(),
     ]);
 
@@ -287,30 +321,12 @@ export class TapoClient {
   }
 
   /**
-   * Generate IV for encryption/decryption
-   */
-  private generateIV(seq: number, sessionKey: Buffer): Buffer {
-    const seqBytes = Buffer.alloc(4);
-    seqBytes.writeUInt32LE(seq, 0);
-    
-    const ivData = Buffer.concat([Buffer.from('iv'), sessionKey, seqBytes]);
-    const iv = this.sha256(ivData);
-    
-    return iv.slice(0, 16);
-  }
-
-  /**
-   * SHA256 hash helper
+   * SHA256 hash helper using Node.js crypto
    */
   private sha256(data: Buffer | string): Buffer {
-    return Buffer.from(
-      CryptoJS.SHA256(
-        CryptoJS.lib.WordArray.create(
-          typeof data === 'string' ? Buffer.from(data) : data
-        )
-      ).toString(CryptoJS.enc.Hex),
-      'hex'
-    );
+    const hash = crypto.createHash('sha256');
+    hash.update(typeof data === 'string' ? Buffer.from(data) : data);
+    return hash.digest();
   }
 
   /**
