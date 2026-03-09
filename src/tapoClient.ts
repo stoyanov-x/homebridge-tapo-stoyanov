@@ -2,13 +2,16 @@
  * Tapo Device Client
  * Handles communication with Tapo devices using the KLAP protocol
  * 
- * KLAP v2 Protocol Implementation based on python-kasa library
+ * KLAP Protocol Implementation based on python-kasa library
+ * Supports both KLAP v1 and v2 with auto-detection
  * https://github.com/python-kasa/python-kasa
  */
 
 import axios, { AxiosInstance } from 'axios';
 import * as crypto from 'crypto';
 import { TapoDeviceInfo, TapoResponse, TapoCredentials } from './types';
+
+type KLAPVersion = 1 | 2;
 
 interface KLAPSession {
   localSeed: Buffer;
@@ -19,6 +22,7 @@ interface KLAPSession {
   sig: Buffer;       // Signature key (28 bytes)
   seq: number;       // Sequence number (signed 32-bit)
   timeout: number;   // Session expiry timestamp
+  version: KLAPVersion;
 }
 
 export class TapoClient {
@@ -30,6 +34,7 @@ export class TapoClient {
   private httpClient: AxiosInstance;
   private session?: KLAPSession;
   private cookie?: string;
+  private klapVersion?: KLAPVersion;  // Remember which version worked
 
   constructor(ip: string, credentials: TapoCredentials) {
     this.ip = ip;
@@ -45,103 +50,137 @@ export class TapoClient {
   }
 
   /**
-   * Authenticate with the device using KLAP v2 protocol
+   * Authenticate with the device using KLAP protocol
+   * Tries KLAP v1 first, then falls back to v2
    */
   private async authenticate(): Promise<void> {
-    try {
-      // Generate local seed (16 random bytes)
-      const localSeed = crypto.randomBytes(16);
-      
-      // Calculate auth hash: sha256(sha1(username) + sha1(password))
-      const authHash = this.generateAuthHash(
-        this.credentials.email,
-        this.credentials.password
-      );
-
-      // Step 1: Handshake1 - Send local seed
-      const response1 = await this.httpClient.post('/app/handshake1', localSeed, {
-        headers: { 'Content-Type': 'application/octet-stream' },
-        responseType: 'arraybuffer',
-      });
-
-      const handshake1Data = Buffer.from(response1.data);
-      
-      // Response is: remote_seed (16 bytes) + server_hash (32 bytes)
-      if (handshake1Data.length !== 48) {
-        throw new Error(`Invalid handshake1 response length: ${handshake1Data.length}`);
-      }
-      
-      const remoteSeed = handshake1Data.slice(0, 16);
-      const serverHash = handshake1Data.slice(16, 48);
-      
-      const cookie = response1.headers['set-cookie']?.[0];
-      if (!cookie) {
-        throw new Error('No session cookie received from device');
-      }
-      this.cookie = cookie;
-
-      // Verify server hash: sha256(local_seed + remote_seed + auth_hash) - KLAP v2
-      const expectedServerHash = this.sha256(
-        Buffer.concat([localSeed, remoteSeed, authHash])
-      );
-      
-      if (!serverHash.equals(expectedServerHash)) {
-        throw new Error('Server hash verification failed - invalid credentials');
-      }
-
-      // Step 2: Handshake2 - Send client hash: sha256(remote_seed + local_seed + auth_hash) - KLAP v2
-      const clientHash = this.sha256(
-        Buffer.concat([remoteSeed, localSeed, authHash])
-      );
-
-      const response2 = await this.httpClient.post('/app/handshake2', clientHash, {
-        headers: {
-          'Content-Type': 'application/octet-stream',
-          'Cookie': cookie,
-        },
-        responseType: 'arraybuffer',
-      });
-
-      if (response2.status !== 200) {
-        throw new Error(`Handshake2 failed with status: ${response2.status}`);
-      }
-
-      // Step 3: Derive session keys
-      // Key: sha256("lsk" + local_seed + remote_seed + auth_hash)[:16]
-      const keyPayload = Buffer.concat([Buffer.from('lsk'), localSeed, remoteSeed, authHash]);
-      const key = this.sha256(keyPayload).slice(0, 16);
-      
-      // IV: sha256("iv" + local_seed + remote_seed + auth_hash)
-      // First 12 bytes are base IV, last 4 bytes are initial seq (signed big-endian)
-      const ivPayload = Buffer.concat([Buffer.from('iv'), localSeed, remoteSeed, authHash]);
-      const fullIv = this.sha256(ivPayload);
-      const iv = fullIv.slice(0, 12);
-      const seq = fullIv.readInt32BE(28);
-      
-      // Signature key: sha256("ldk" + local_seed + remote_seed + auth_hash)[:28]
-      const sigPayload = Buffer.concat([Buffer.from('ldk'), localSeed, remoteSeed, authHash]);
-      const sig = this.sha256(sigPayload).slice(0, 28);
-
-      this.session = {
-        localSeed,
-        remoteSeed,
-        authHash,
-        key,
-        iv,
-        sig,
-        seq,
-        timeout: Date.now() + 86400000, // 24 hours
-      };
-
-    } catch (error: any) {
-      throw new Error(`Authentication failed: ${error.message}`);
+    // If we already know the version, use it directly
+    if (this.klapVersion) {
+      await this.authenticateWithVersion(this.klapVersion);
+      return;
     }
+
+    // Try KLAP v1 first (most common for Tapo devices)
+    try {
+      await this.authenticateWithVersion(1);
+      this.klapVersion = 1;
+      return;
+    } catch (error: any) {
+      // KLAP v1 failed, try v2
+    }
+
+    // Try KLAP v2
+    try {
+      await this.authenticateWithVersion(2);
+      this.klapVersion = 2;
+      return;
+    } catch (error: any) {
+      throw new Error(`Authentication failed with both KLAP v1 and v2: ${error.message}`);
+    }
+  }
+
+  /**
+   * Authenticate with a specific KLAP version
+   */
+  private async authenticateWithVersion(version: KLAPVersion): Promise<void> {
+    // Generate local seed (16 random bytes)
+    const localSeed = crypto.randomBytes(16);
+    
+    // Calculate auth hash based on version
+    const authHash = version === 1
+      ? this.generateAuthHashV1(this.credentials.email, this.credentials.password)
+      : this.generateAuthHashV2(this.credentials.email, this.credentials.password);
+
+    // Step 1: Handshake1 - Send local seed
+    const response1 = await this.httpClient.post('/app/handshake1', localSeed, {
+      headers: { 'Content-Type': 'application/octet-stream' },
+      responseType: 'arraybuffer',
+    });
+
+    const handshake1Data = Buffer.from(response1.data);
+    
+    // Response is: remote_seed (16 bytes) + server_hash (32 bytes)
+    if (handshake1Data.length !== 48) {
+      throw new Error(`Invalid handshake1 response length: ${handshake1Data.length}`);
+    }
+    
+    const remoteSeed = handshake1Data.slice(0, 16);
+    const serverHash = handshake1Data.slice(16, 48);
+    
+    const cookie = response1.headers['set-cookie']?.[0];
+    if (!cookie) {
+      throw new Error('No session cookie received from device');
+    }
+    this.cookie = cookie;
+
+    // Calculate expected server hash based on version
+    const expectedServerHash = version === 1
+      ? this.sha256(Buffer.concat([localSeed, authHash]))  // v1: local + auth
+      : this.sha256(Buffer.concat([localSeed, remoteSeed, authHash]));  // v2: local + remote + auth
+    
+    if (!serverHash.equals(expectedServerHash)) {
+      throw new Error(`KLAP v${version} server hash verification failed`);
+    }
+
+    // Step 2: Handshake2 - Send client hash
+    const clientHash = version === 1
+      ? this.sha256(Buffer.concat([remoteSeed, authHash]))  // v1: remote + auth
+      : this.sha256(Buffer.concat([remoteSeed, localSeed, authHash]));  // v2: remote + local + auth
+
+    const response2 = await this.httpClient.post('/app/handshake2', clientHash, {
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Cookie': cookie,
+      },
+      responseType: 'arraybuffer',
+    });
+
+    if (response2.status !== 200) {
+      throw new Error(`Handshake2 failed with status: ${response2.status}`);
+    }
+
+    // Step 3: Derive session keys (same for both versions)
+    // Key: sha256("lsk" + local_seed + remote_seed + auth_hash)[:16]
+    const keyPayload = Buffer.concat([Buffer.from('lsk'), localSeed, remoteSeed, authHash]);
+    const key = this.sha256(keyPayload).slice(0, 16);
+    
+    // IV: sha256("iv" + local_seed + remote_seed + auth_hash)
+    // First 12 bytes are base IV, last 4 bytes are initial seq (signed big-endian)
+    const ivPayload = Buffer.concat([Buffer.from('iv'), localSeed, remoteSeed, authHash]);
+    const fullIv = this.sha256(ivPayload);
+    const iv = fullIv.slice(0, 12);
+    const seq = fullIv.readInt32BE(28);
+    
+    // Signature key: sha256("ldk" + local_seed + remote_seed + auth_hash)[:28]
+    const sigPayload = Buffer.concat([Buffer.from('ldk'), localSeed, remoteSeed, authHash]);
+    const sig = this.sha256(sigPayload).slice(0, 28);
+
+    this.session = {
+      localSeed,
+      remoteSeed,
+      authHash,
+      key,
+      iv,
+      sig,
+      seq,
+      timeout: Date.now() + 86400000, // 24 hours
+      version,
+    };
+  }
+
+  /**
+   * Generate KLAP v1 auth hash: md5(md5(username) + md5(password))
+   */
+  private generateAuthHashV1(username: string, password: string): Buffer {
+    const usernameHash = crypto.createHash('md5').update(username).digest();
+    const passwordHash = crypto.createHash('md5').update(password).digest();
+    return crypto.createHash('md5').update(Buffer.concat([usernameHash, passwordHash])).digest();
   }
 
   /**
    * Generate KLAP v2 auth hash: sha256(sha1(username) + sha1(password))
    */
-  private generateAuthHash(username: string, password: string): Buffer {
+  private generateAuthHashV2(username: string, password: string): Buffer {
     const usernameHash = crypto.createHash('sha1').update(username).digest();
     const passwordHash = crypto.createHash('sha1').update(password).digest();
     return this.sha256(Buffer.concat([usernameHash, passwordHash]));
