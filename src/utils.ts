@@ -134,6 +134,47 @@ export function isEncryptionAvailable(storagePath: string): boolean {
 }
 
 /**
+ * Try to base64-decode a string.
+ * Returns the decoded string if it's valid base64 and decodes to readable UTF-8,
+ * otherwise returns the original string.
+ */
+export function tryBase64Decode(value: string | undefined): string | undefined {
+  if (!value) {
+    return value;
+  }
+
+  try {
+    // Check if it looks like base64 (only alphanumeric, +, /, =)
+    if (!/^[A-Za-z0-9+/]+=*$/.test(value)) {
+      return value;
+    }
+
+    const decoded = Buffer.from(value, 'base64').toString('utf8');
+    
+    // Verify the decoded string is valid UTF-8 with printable characters
+    // If it contains mostly control characters or invalid UTF-8, it's probably not base64-encoded text
+    const printableRatio = decoded.replace(/[\x00-\x1F\x7F-\x9F]/g, '').length / decoded.length;
+    if (printableRatio < 0.9) {
+      return value;
+    }
+
+    // Re-encode to verify it was actually base64
+    const reencoded = Buffer.from(decoded, 'utf8').toString('base64');
+    // Remove padding differences
+    const normalizedOriginal = value.replace(/=+$/, '');
+    const normalizedReencoded = reencoded.replace(/=+$/, '');
+    
+    if (normalizedOriginal === normalizedReencoded) {
+      return decoded;
+    }
+  } catch {
+    // Not valid base64, return original
+  }
+
+  return value;
+}
+
+/**
  * Get decrypted credentials from config
  */
 export function getDecryptedCredentials(
@@ -226,9 +267,10 @@ export async function discoverDevices(credentials: TapoCredentials, logger?: any
           ]);
 
           if (info) {
+            const decodedNickname = tryBase64Decode(info.nickname);
             devices.push({
-              name: info.nickname || info.model,
-              nickname: info.nickname,
+              name: decodedNickname || info.model,
+              nickname: decodedNickname,
               ip: ip,
               mac: info.mac || `unknown-${ip}`,
               model: info.model || 'Unknown',
@@ -238,8 +280,8 @@ export async function discoverDevices(credentials: TapoCredentials, logger?: any
               hw_ver: info.hw_ver,
               fw_ver: info.fw_ver,
             });
-            log.info?.(`Found device: ${info.nickname || info.model} at ${ip}`);
-            progressCallback?.(`Found: ${info.nickname || info.model} at ${ip}`);
+            log.info?.(`Found device: ${decodedNickname || info.model} at ${ip}`);
+            progressCallback?.(`Found: ${decodedNickname || info.model} at ${ip}`);
           }
         } catch (error) {
           // Device not found or not responding - this is expected for most IPs
@@ -283,9 +325,10 @@ export async function checkDevice(ip: string, credentials: TapoCredentials): Pro
     ]);
 
     if (info) {
+      const decodedNickname = tryBase64Decode(info.nickname);
       return {
-        name: info.nickname || info.model,
-        nickname: info.nickname,
+        name: decodedNickname || info.model,
+        nickname: decodedNickname,
         ip: ip,
         mac: info.mac || `unknown-${ip}`,
         model: info.model || 'Unknown',
@@ -327,13 +370,14 @@ export async function testConnection(ip: string, credentials: TapoCredentials): 
     ]);
 
     if (info) {
+      const decodedNickname = tryBase64Decode(info.nickname);
       return {
         success: true,
         status: 'connected',
-        message: `Connected to ${info.nickname || info.model}`,
+        message: `Connected to ${decodedNickname || info.model}`,
         device: {
-          name: info.nickname || info.model,
-          nickname: info.nickname,
+          name: decodedNickname || info.model,
+          nickname: decodedNickname,
           ip: ip,
           mac: info.mac || `unknown-${ip}`,
           model: info.model || 'Unknown',
