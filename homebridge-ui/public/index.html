@@ -614,12 +614,20 @@
       </div>
     </div>
 
-    <!-- Save Button (Initially Hidden) -->
-    <div id="save-section" class="hidden">
+    <!-- Action Buttons (Initially Hidden) -->
+    <div id="save-section" class="hidden" style="display: flex; gap: 12px;">
+      <button 
+        class="btn btn-secondary"
+        onclick="homebridge.closeSettings()"
+        style="flex: 1;"
+      >
+        Cancel
+      </button>
       <button 
         id="btn-save" 
-        class="btn btn-primary btn-block"
+        class="btn btn-primary"
         onclick="saveConfig()"
+        style="flex: 2;"
       >
         Save Configuration
       </button>
@@ -629,6 +637,9 @@
   <script>
     // Use homebridge plugin UI utils
     const homebridge = window.homebridge;
+    
+    // Hide the default schema form - we use a fully custom UI
+    homebridge.hideSchemaForm();
     
     let discoveredDevices = [];
     let selectedDeviceIds = new Set();
