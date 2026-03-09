@@ -3,7 +3,7 @@
  * Handles device discovery requests from the config UI
  */
 
-const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
+const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
 const { discoverDevices, getDecryptedCredentials, encryptCredential } = require('../dist/utils');
 
 class PluginUiServer extends HomebridgePluginUiServer {
@@ -13,10 +13,10 @@ class PluginUiServer extends HomebridgePluginUiServer {
     // Handle device discovery requests
     this.onRequest('/discover', async (payload) => {
       try {
-        const { email, password } = payload;
+        const { email, password } = payload || {};
 
         if (!email || !password) {
-          throw new Error('Email and password are required');
+          throw new RequestError('Email and password are required', { status: 400 });
         }
 
         // Validate email format
@@ -50,10 +50,10 @@ class PluginUiServer extends HomebridgePluginUiServer {
     // Handle credential encryption requests
     this.onRequest('/encrypt-credentials', async (payload) => {
       try {
-        const { email, password } = payload;
+        const { email, password } = payload || {};
 
         if (!email || !password) {
-          throw new Error('Email and password are required');
+          throw new RequestError('Email and password are required', { status: 400 });
         }
 
         return {
