@@ -1349,12 +1349,12 @@
       btn.innerHTML = '<span class="loading-spinner"></span> Testing connection...';
 
       try {
-        // First, test the connection with detailed feedback
-        const testResult = await homebridge.request('/test-connection', { email, password, ip });
+        // Use check-device endpoint (initial setup, credentials required)
+        const result = await homebridge.request('/check-device', { email, password, ip, name });
 
-        if (testResult.success && testResult.device) {
+        if (result.success && result.device) {
           // Connection successful, add the device
-          const device = testResult.device;
+          const device = result.device;
           if (name) {
             device.name = name;
             device.nickname = name;
@@ -1483,10 +1483,6 @@
 
     // Verify all devices at once
     async function verifyAllDevices() {
-      // Use stored credentials or fall back to input fields (may be empty if using server-stored creds)
-      let email = storedCredentials.email || document.getElementById('email').value.trim();
-      let password = storedCredentials.password || document.getElementById('password').value;
-      
       if (discoveredDevices.length === 0) {
         alert('No devices to verify');
         return;
@@ -1505,12 +1501,8 @@
           mac: d.mac,
         }));
         
-        // Build payload - server will use stored credentials if email/password not provided
+        // Server will use stored/decrypted credentials from config
         const payload = { devices: devicesToVerify };
-        if (email && password) {
-          payload.email = email;
-          payload.password = password;
-        }
         
         const response = await homebridge.request('/verify-devices', payload);
         
@@ -1550,17 +1542,7 @@
           document.getElementById('step-credentials').classList.remove('credentials-collapsed');
           alert('Please enter your TP-Link credentials to verify devices.');
           document.getElementById('email').focus();
-        } else {
-          alert('Failed to verify devices: ' + error.message);
-        }
-        
-        // Reset testing status
-        discoveredDevices.forEach(device => {
-          if (device.connectionStatus === 'testing') {
-            device.connectionStatus = null;
-          }
-        });
-        renderDevices();
+        alert('Failed to verify devices: ' + (error.message || 'Unknown error. Make sure configuration is saved.'));enderDevices();
       }
     }
 
