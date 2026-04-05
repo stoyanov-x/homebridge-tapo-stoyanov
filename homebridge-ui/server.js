@@ -205,82 +205,136 @@ class PluginUiServer extends HomebridgePluginUiServer {
           throw new RequestError('Invalid server URL format', { status: 400 });
         }
 
-        // Make request to /health endpoint from server-side
         const https = require('https');
         const http = require('http');
         const client = url.protocol === 'https:' ? https : http;
 
-        const options = {
-          hostname: url.hostname,
-          port: url.port || (url.protocol === 'https:' ? 443 : 80),
-          path: '/health',
-          method: 'GET',
-          headers: {},
-          timeout: 5000,
+        // Helper to make HTTP request
+        const makeRequest = (path, method = 'GET', body = null) => {
+          const options = {
+            hostname: url.hostname,
+            port: url.port || (url.protocol === 'https:' ? 443 : 80),
+            path: path,
+            method: method,
+            headers: {},
+            timeout: 5000,
+          };
+
+          if (apiKey) {
+            options.headers['X-API-Key'] = apiKey;
+          }
+
+          if (body) {
+            const bodyStr = JSON.stringify(body);
+            options.headers['Content-Type'] = 'application/json';
+            options.headers['Content-Length'] = Buffer.byteLength(bodyStr);
+          }
+
+          return new Promise((resolve, reject) => {
+            const req = client.request(options, (res) => {
+              let data = '';
+
+              res.on('data', (chunk) => {
+                data += chunk;
+              });
+
+              res.on('end', () => {
+                let json = null;
+                try {
+                  json = JSON.parse(data);
+                } catch {
+                  // Not JSON
+                }
+                resolve({ status: res.statusCode, data: json || data });
+              });
+            });
+
+            req.on('error', (error) => {
+              reject(error);
+            });
+
+            req.on('timeout', () => {
+              req.destroy();
+              reject(new Error('Request timeout'));
+            });
+
+            if (body) {
+              req.write(JSON.stringify(body));
+            }
+            req.end();
+          });
         };
 
-        // Add API key if provided
-        if (apiKey) {
-          options.headers['X-API-Key'] = apiKey;
+        const results = {
+          health: null,
+          auth: null,
+          secretDelivery: null,
+        };
+
+        // Test 1: Health endpoint
+        try {
+          const health = await makeRequest('/health');
+          if (health.status === 200) {
+            results.health = {
+              success: true,
+              message: 'Server is reachable',
+              version: health.data?.version,
+            };
+          } else {
+            results.health = {
+              success: false,
+              message: `HTTP ${health.status}`,
+            };
+          }
+        } catch (error) {
+          results.health = {
+            success: false,
+            message: error.message,
+          };
         }
 
-        return new Promise((resolve, reject) => {
-          const req = client.request(options, (res) => {
-            let data = '';
-
-            res.on('data', (chunk) => {
-              data += chunk;
-            });
-
-            res.on('end', () => {
-              if (res.statusCode === 200) {
-                try {
-                  const json = JSON.parse(data);
-                  resolve({
-                    success: true,
-                    version: json.version,
-                  });
-                } catch {
-                  resolve({
-                    success: true,
-                    message: 'Server responded but returned invalid JSON',
-                  });
-                }
-              } else if (res.statusCode === 401 || res.statusCode === 403) {
-                resolve({
-                  success: false,
-                  error: 'Authentication Failed',
-                  message: 'Invalid API key. Check your API key or remove it if not required by the server.',
-                });
-              } else {
-                resolve({
-                  success: false,
-                  error: `Server Error (HTTP ${res.statusCode})`,
-                  message: res.statusMessage || 'Unknown server error',
-                });
-              }
-            });
-          });
-
-          req.on('error', (error) => {
-            resolve({
+        // Test 2: API key authentication (if provided)
+        if (apiKey) {
+          try {
+            // Test with API key
+            const withKey = await makeRequest('/health');
+            // Test without API key
+            const withoutKey = await makeRequest('/health').catch(() => ({ status: 401 }));
+            
+            if (withKey.status === 200 && withoutKey.status === 401) {
+              results.auth = {
+                success: true,
+                message: 'API key authentication working correctly',
+              };
+            } else if (withKey.status === 200) {
+              results.auth = {
+                success: true,
+                message: 'API key accepted (server may not require auth)',
+                warning: true,
+              };
+            } else if (withKey.status === 401 || withKey.status === 403) {
+              results.auth = {
+                success: false,
+                message: 'API key rejected - check your API key',
+              };
+            }
+          } catch (error) {
+            results.auth = {
               success: false,
-              error: 'Connection Failed',
-              message: error.message,
-            });
-          });
+              message: `Auth test failed: ${error.message}`,
+            };
+          }
+        }
 
-          req.on('timeout', () => {
-            req.destroy();
-            resolve({
-              success: false,
-              error: 'Connection Timeout',
-              message: 'Server did not respond within 5 seconds',
-            });
-          });
+        // Determine overall success
+        const allPassed = results.health?.success && 
+                         (results.auth?.success !== false);
 
-          req.end();
-        });
+        return {
+          success: allPassed,
+          version: results.health?.version,
+          results: results,
+        };
       } catch (error) {
         console.error('Test secret server error:', error);
         throw error;
@@ -298,12 +352,23 @@ class PluginUiServer extends HomebridgePluginUiServer {
   async getStoredCredentials() {
     try {
       const pluginConfig = await this.getPluginConfig();
+      
       if (!pluginConfig || pluginConfig.length === 0) {
+        console.log('[Tapo UI] getStoredCredentials: No plugin config found');
         return null;
       }
       
       const config = pluginConfig[0];
+      console.log('[Tapo UI] getStoredCredentials: credentialType =', config.credentialType, ', has email:', !!config.email, ', has password:', !!config.password, ', isEncrypted:', !!config.isEncrypted);
+      
+      // Check credential type - only traditional mode has email/password
+      if (config.credentialType === 'secret-request') {
+        console.log('[Tapo UI] getStoredCredentials: Using Secret Request mode - no stored credentials');
+        return null;
+      }
+      
       if (!config.email || !config.password) {
+        console.log('[Tapo UI] getStoredCredentials: Missing email or password');
         return null;
       }
       
@@ -317,10 +382,12 @@ class PluginUiServer extends HomebridgePluginUiServer {
           return null;
         }
         
+        console.log('[Tapo UI] getStoredCredentials: Successfully decrypted credentials');
         return { email, password };
       }
       
       // Return plaintext credentials
+      console.log('[Tapo UI] getStoredCredentials: Returning plaintext credentials');
       return { email: config.email, password: config.password };
     } catch (error) {
       console.warn('[Tapo] Error getting stored credentials:', error.message);
