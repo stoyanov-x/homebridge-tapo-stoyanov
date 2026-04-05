@@ -1136,6 +1136,12 @@
         };
 
         if (credentialType === 'traditional') {
+          // Clean up secret-request fields if switching modes
+          delete config.secretName;
+          delete config.secretServerUrl;
+          delete config.secretTimeout;
+          delete config.secretApiKey;
+          
           // Traditional mode: require and encrypt credentials
           let { email, password } = storedCredentials;
           
@@ -1158,6 +1164,11 @@
           config.isEncrypted = true;
           
         } else {
+          // Clean up traditional mode fields if switching modes
+          delete config.email;
+          delete config.password;
+          delete config.isEncrypted;
+          
           // Secret Request mode: store secret configuration
           const secretName = document.getElementById('secret-name').value.trim();
           const secretServerUrl = document.getElementById('secret-server-url').value.trim();
