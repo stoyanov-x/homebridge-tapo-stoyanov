@@ -395,6 +395,48 @@
       cursor: pointer;
     }
 
+    /* Credential method radio buttons */
+    .credential-method-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      border: 2px solid #e5e5e7;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .credential-method-option:hover {
+      border-color: #d2d2d7;
+      background: #fafafa;
+    }
+
+    .credential-method-option input[type="radio"] {
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .credential-method-option input[type="radio"]:checked {
+      accent-color: #007aff;
+    }
+
+    .credential-method-content {
+      flex: 1;
+    }
+
+    .credential-method-content strong {
+      display: block;
+      color: #1d1d1f;
+      margin-bottom: 4px;
+    }
+
+    .credential-method-content .description {
+      font-size: 12px;
+      color: #86868b;
+      line-height: 1.4;
+    }
+
     .empty-state {
       text-align: center;
       padding: 60px 20px;
@@ -481,7 +523,7 @@
       <div class="form-group">
         <label>Credential Method</label>
         <div style="display: flex; flex-direction: column; gap: 12px;">
-          <label style="display: flex; align-items: center; cursor: pointer;">
+          <label class="credential-method-option">
             <input 
               type="radio" 
               name="credentialType" 
@@ -489,27 +531,25 @@
               id="credential-type-traditional"
               checked
               onchange="toggleCredentialFields()"
-              style="margin-right: 8px;"
             />
-            <div>
+            <div class="credential-method-content">
               <strong>Traditional (TP-Link Account)</strong>
-              <div style="font-size: 12px; color: #888; margin-top: 2px;">
+              <div class="description">
                 Credentials stored encrypted on disk (recommended for most users)
               </div>
             </div>
           </label>
-          <label style="display: flex; align-items: center; cursor: pointer;">
+          <label class="credential-method-option">
             <input 
               type="radio" 
               name="credentialType" 
               value="secret-request" 
               id="credential-type-secret"
               onchange="toggleCredentialFields()"
-              style="margin-right: 8px;"
             />
-            <div>
+            <div class="credential-method-content">
               <strong>Secret Request (iPhone Push)</strong>
-              <div style="font-size: 12px; color: #888; margin-top: 2px;">
+              <div class="description">
                 Credentials delivered via push notification, never stored on disk
               </div>
             </div>
@@ -1075,18 +1115,14 @@
           alert(`Connection test failed:\n\n${result.message}`);
         }
       } catch (error) {
-        statusEl.className = 'device-status error';
-        statusEl.innerHTML = '! ERROR';
+        statusEl.className = 'device-status auth_failed';
+        statusEl.innerHTML = '! AUTH FAIL';
         
-        // Check if error is about missing credentials
-        if (error.message && error.message.includes('credentials')) {
-          // Show credentials section to get credentials
-          document.getElementById('step-credentials').classList.remove('hidden');
-          document.getElementById('step-credentials').classList.remove('credentials-collapsed');
-          alert('Please enter your TP-Link credentials to test devices.');
-          document.getElementById('email').focus();
-        } else {
-          alert(`Test failed: ${error.message}`);
+        // Just update the device's connection info, don't show popup
+        const device = discoveredDevices.find(d => d.mac === mac);
+        if (device) {
+          device.connectionStatus = 'auth_failed';
+          device.connectionMessage = error.message || 'Authentication failed - check credentials';
         }
       } finally {
         const btnElFinal = document.getElementById(`btn-test-${mac}`);

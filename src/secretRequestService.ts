@@ -365,6 +365,7 @@ export class SecretRequestService extends EventEmitter {
 
   /**
    * Censor email address for logging
+   * Shows first 2 chars, then exact number of asterisks for remaining chars
    */
   private censorEmail(email: string): string {
     const parts = email.split('@');
@@ -372,7 +373,12 @@ export class SecretRequestService extends EventEmitter {
       return '***';
     }
     const [user, domain] = parts;
-    const censoredUser = user.length > 2 ? user.slice(0, 2) + '***' : '***';
-    return `${censoredUser}@${domain}`;
+    if (user.length <= 2) {
+      return '***@' + domain;
+    }
+    const visibleChars = user.slice(0, 2);
+    const hiddenCount = user.length - 2;
+    const asterisks = '*'.repeat(hiddenCount);
+    return `${visibleChars}${asterisks}@${domain}`;
   }
 }
