@@ -1569,7 +1569,17 @@
           document.getElementById('step-credentials').classList.remove('credentials-collapsed');
           alert('Please enter your TP-Link credentials to verify devices.');
           document.getElementById('email').focus();
-        alert('Failed to verify devices: ' + (error.message || 'Unknown error. Make sure configuration is saved.'));enderDevices();
+        } else {
+          alert('Failed to verify devices: ' + (error.message || 'Unknown error. Make sure configuration is saved.'));
+        }
+        
+        // Reset all devices to unknown status
+        discoveredDevices.forEach(device => {
+          if (device.connectionStatus === 'testing') {
+            device.connectionStatus = null;
+          }
+        });
+        renderDevices();
       }
     }
 
