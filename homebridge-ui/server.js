@@ -199,17 +199,24 @@ class PluginUiServer extends HomebridgePluginUiServer {
   async getStoredCredentials() {
     try {
       const pluginConfig = await this.getPluginConfig();
+      console.log('[Tapo] getStoredCredentials - config array length:', pluginConfig?.length);
+      
       if (!pluginConfig || pluginConfig.length === 0) {
+        console.log('[Tapo] No plugin config found');
         return null;
       }
       
       const config = pluginConfig[0];
+      console.log('[Tapo] Config has email:', !!config.email, 'password:', !!config.password, 'isEncrypted:', config.isEncrypted);
+      
       if (!config.email || !config.password) {
+        console.log('[Tapo] Missing email or password in config');
         return null;
       }
       
       // If credentials are encrypted, decrypt them
       if (config.isEncrypted) {
+        console.log('[Tapo] Decrypting credentials...');
         const email = decryptCredential(config.email, this.homebridgeStoragePath);
         const password = decryptCredential(config.password, this.homebridgeStoragePath);
         
@@ -218,10 +225,12 @@ class PluginUiServer extends HomebridgePluginUiServer {
           return null;
         }
         
+        console.log('[Tapo] Successfully decrypted credentials');
         return { email, password };
       }
       
       // Return plaintext credentials
+      console.log('[Tapo] Returning plaintext credentials');
       return { email: config.email, password: config.password };
     } catch (error) {
       console.warn('[Tapo] Error getting stored credentials:', error.message);
