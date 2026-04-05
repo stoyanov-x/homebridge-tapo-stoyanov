@@ -61,6 +61,12 @@
         "minimum": 3600,
         "maximum": 172800
       },
+      "secretApiKey": {
+        "title": "API Key (Optional)",
+        "type": "string",
+        "description": "API key for authentication with the Secret Request server. Can also be set via SECRET_API_KEY environment variable.",
+        "placeholder": "your-api-key-here"
+      },
       "devices": {
         "title": "Devices",
         "type": "array",

@@ -16,6 +16,7 @@ export interface TapoPlatformConfig {
   secretName?: string;
   secretServerUrl?: string;
   secretTimeout?: number; // seconds (3600-172800, default: 43200 = 12h)
+  secretApiKey?: string; // API key for secret-request server (can also use SECRET_API_KEY env var)
 }
 
 export interface TapoDeviceConfig {

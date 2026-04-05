@@ -82,6 +82,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
           secretName: this.config.secretName,
           serverUrl: this.config.secretServerUrl,
           timeoutSeconds: this.config.secretTimeout,
+          apiKey: this.config.secretApiKey,
         },
         this.log,
       );
@@ -208,14 +209,6 @@ export class TapoPlatform implements DynamicPlatformPlugin {
    * Create the appropriate accessory instance based on device type
    */
   private createAccessory(accessory: PlatformAccessory, config: TapoDeviceConfig) {
-    // If credentials not ready (secret-request mode), defer initialization
-    if (!this.credentialsReady) {
-      this.log.info(`[${config.name}] Deferring initialization until credentials are available`);
-      this.pendingAccessories.push({ accessory, config });
-      // Still create a placeholder so device shows in HomeKit (will show as "No Response")
-      return;
-    }
-    
     // Remove old instance if it exists
     const oldInstance = this.activeAccessories.get(accessory.UUID);
     if (oldInstance) {
@@ -233,8 +226,15 @@ export class TapoPlatform implements DynamicPlatformPlugin {
           accessory,
           config,
           this.log,
+          this.credentialsReady, // Pass credentials ready state
         );
         this.activeAccessories.set(accessory.UUID, lightAccessory);
+        
+        // If credentials not ready, add to pending list for later initialization
+        if (!this.credentialsReady) {
+          this.log.info(`[${config.name}] Device created but waiting for credentials (will show as 'No Response')`);
+          this.pendingAccessories.push({ accessory, config });
+        }
         break;
 
       default:
@@ -255,10 +255,36 @@ export class TapoPlatform implements DynamicPlatformPlugin {
     const pending = [...this.pendingAccessories];
     this.pendingAccessories = [];
     
+    // Initialize existing accessories that were created but not initialized
     for (const { accessory, config } of pending) {
-      this.createAccessory(accessory, config);
+      const existingAccessory = this.activeAccessories.get(accessory.UUID);
+      if (existingAccessory) {
+        // Call initializeDevice() on the existing accessory instance
+        existingAccessory.initializeDevice().catch(err => {
+          this.log.error(`[${config.name}] Failed to initialize:`, err);
+        });
+      }
     }
     
     this.log.info('All devices initialized successfully!');
+  }
+  
+  /**
+   * Cleanup when platform is destroyed
+   */
+  public cleanup() {
+    // Cancel any ongoing secret request
+    if (this.secretRequestService) {
+      this.secretRequestService.cancel().catch(err => {
+        this.log.debug('[SecretRequest] Error during cleanup:', err);
+      });
+      this.secretRequestService.removeAllListeners();
+    }
+    
+    // Clean up all accessories
+    for (const accessory of this.activeAccessories.values()) {
+      accessory.destroy();
+    }
+    this.activeAccessories.clear();
   }
 }

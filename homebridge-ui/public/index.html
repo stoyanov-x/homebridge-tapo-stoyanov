@@ -588,6 +588,18 @@
           </p>
         </div>
 
+        <div class="form-group">
+          <label for="secret-api-key">API Key (Optional)</label>
+          <input 
+            type="text" 
+            id="secret-api-key" 
+            placeholder="your-api-key-here"
+          />
+          <p style="font-size: 12px; color: #888; margin-top: 4px;">
+            API key for Secret Request server authentication. Can also be set via SECRET_API_KEY environment variable.
+          </p>
+        </div>
+
         <p style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 13px; margin-bottom: 16px;">
           ⚠️ <strong>Note:</strong> Secret Request requires the secret-request server to be running and credentials stored in your iPhone's Scriptable Keychain. 
           Devices will appear in HomeKit immediately but show "No Response" until you approve the request on your iPhone.
@@ -1150,6 +1162,7 @@
           const secretName = document.getElementById('secret-name').value.trim();
           const secretServerUrl = document.getElementById('secret-server-url').value.trim();
           const secretTimeoutHours = parseInt(document.getElementById('secret-timeout').value) || 12;
+          const secretApiKey = document.getElementById('secret-api-key').value.trim();
           
           if (!secretName) {
             alert('Please enter a secret name for Secret Request mode');
@@ -1161,6 +1174,9 @@
           config.secretName = secretName;
           config.secretServerUrl = secretServerUrl || 'http://localhost:8420';
           config.secretTimeout = secretTimeoutHours * 3600; // Convert hours to seconds
+          if (secretApiKey) {
+            config.secretApiKey = secretApiKey;
+          }
         }
 
         // Save to homebridge
@@ -1368,6 +1384,9 @@
             }
             if (pluginConfig.secretTimeout) {
               document.getElementById('secret-timeout').value = Math.round(pluginConfig.secretTimeout / 3600); // Convert seconds to hours
+            }
+            if (pluginConfig.secretApiKey) {
+              document.getElementById('secret-api-key').value = pluginConfig.secretApiKey;
             }
           } else {
             // Traditional mode - show placeholders for encrypted credentials

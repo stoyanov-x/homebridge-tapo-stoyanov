@@ -185,6 +185,7 @@ Devices will appear in HomeKit immediately but show "No Response" until you appr
 | `secretName` | Yes | Name of the secret stored in iOS Keychain (e.g., `tapo-credentials`) |
 | `secretServerUrl` | Yes | URL of the secret-request server (default: `http://localhost:8420`) |
 | `secretTimeout` | No | Seconds to wait for secret approval (default: 43200 = 12 hours, range: 3600-172800) |
+| `secretApiKey` | No | API key for server authentication (can also use `SECRET_API_KEY` environment variable) |
 
 #### Troubleshooting Secret Request
 

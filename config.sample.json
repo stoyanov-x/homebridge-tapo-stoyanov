@@ -40,6 +40,7 @@
     "secretName": "tapo-credentials",
     "secretServerUrl": "http://localhost:8420",
     "secretTimeout": 43200,
+    "secretApiKey": "your-api-key-here",
     "pollingInterval": 30,
     "devices": [
       {
