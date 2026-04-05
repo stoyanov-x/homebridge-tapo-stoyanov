@@ -1067,10 +1067,6 @@
     }
 
     async function testDeviceConnection(mac, ip) {
-      // Use stored credentials or fall back to input fields (may be empty if using server-stored creds)
-      let email = storedCredentials.email || document.getElementById('email').value.trim();
-      let password = storedCredentials.password || document.getElementById('password').value;
-      
       const statusEl = document.getElementById(`status-${mac}`);
       const btnEl = document.getElementById(`btn-test-${mac}`);
       
@@ -1081,12 +1077,9 @@
       btnEl.textContent = '...';
       
       try {
-        // Try to test - server will use stored credentials if email/password not provided
+        // Server will use stored/decrypted credentials from config
+        // Never send credentials from client for security
         const payload = { ip };
-        if (email && password) {
-          payload.email = email;
-          payload.password = password;
-        }
         
         const result = await homebridge.request('/test-connection', payload);
         

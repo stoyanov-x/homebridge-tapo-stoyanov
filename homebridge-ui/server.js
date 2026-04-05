@@ -103,18 +103,6 @@ class PluginUiServer extends HomebridgePluginUiServer {
     this.onRequest('/test-connection', async (payload) => {
       try {
         const { ip } = payload || {};
-        let { email, password } = payload || {};
-
-        // If credentials not provided, try to use stored credentials
-        if (!email || !password) {
-          const storedCreds = await this.getStoredCredentials();
-          if (storedCreds) {
-            email = storedCreds.email;
-            password = storedCreds.password;
-          } else {
-            throw new RequestError('No credentials provided and no stored credentials available', { status: 400 });
-          }
-        }
 
         if (!ip) {
           throw new RequestError('IP address is required', { status: 400 });
@@ -126,7 +114,14 @@ class PluginUiServer extends HomebridgePluginUiServer {
           throw new RequestError('Invalid IP address format', { status: 400 });
         }
 
-        const credentials = { email, password };
+        // ALWAYS use server-side stored credentials for security
+        // Never accept credentials from client to prevent plaintext transmission
+        const storedCreds = await this.getStoredCredentials();
+        if (!storedCreds) {
+          throw new RequestError('No saved configuration found. Please save your configuration first.', { status: 400 });
+        }
+
+        const credentials = { email: storedCreds.email, password: storedCreds.password };
         const result = await testConnection(ip, credentials);
         return result;
       } catch (error) {
@@ -139,24 +134,18 @@ class PluginUiServer extends HomebridgePluginUiServer {
     this.onRequest('/verify-devices', async (payload) => {
       try {
         const { devices } = payload || {};
-        let { email, password } = payload || {};
-
-        // If credentials not provided, try to use stored credentials
-        if (!email || !password) {
-          const storedCreds = await this.getStoredCredentials();
-          if (storedCreds) {
-            email = storedCreds.email;
-            password = storedCreds.password;
-          } else {
-            throw new RequestError('No credentials provided and no stored credentials available', { status: 400 });
-          }
-        }
 
         if (!devices || !Array.isArray(devices) || devices.length === 0) {
           throw new RequestError('Devices array is required', { status: 400 });
         }
 
-        const credentials = { email, password };
+        // ALWAYS use server-side stored credentials for security
+        const storedCreds = await this.getStoredCredentials();
+        if (!storedCreds) {
+          throw new RequestError('No saved configuration found. Please save your configuration first.', { status: 400 });
+        }
+
+        const credentials = { email: storedCreds.email, password: storedCreds.password };
         const results = await verifyDevices(devices, credentials);
         return {
           success: true,
