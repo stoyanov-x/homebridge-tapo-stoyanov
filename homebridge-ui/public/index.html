@@ -1723,6 +1723,12 @@
               if (result.results.e2e.outcome) {
                 html += `<br><small style="margin-left: 20px; color: #721c24;">Outcome: ${result.results.e2e.outcome}</small>`;
               }
+              if (result.results.e2e.errorDetails) {
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Details: ${result.results.e2e.errorDetails}</small>`;
+              }
+              if (result.results.e2e.errorCode) {
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Error Code: ${result.results.e2e.errorCode}</small>`;
+              }
               html += '</div>';
             }
             
