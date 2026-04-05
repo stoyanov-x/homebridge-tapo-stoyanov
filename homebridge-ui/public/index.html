@@ -1674,7 +1674,7 @@
           html += '<strong style="color: #721c24;">❌ Tests Failed</strong>';
           
           if (result.results) {
-            html += '<div style="margin-top: 12px; font-size: 13px;">';
+            html += '<div style="margin-top: 12px; font-size: 13px; color: #721c24;">';
             
             // Health check
             if (result.results.health) {
@@ -1684,19 +1684,14 @@
               html += '</div>';
             }
             
-            // Auth check  
-            if (result.results.auth) {
-              html += `<div style="margin-bottom: 6px;">`;
-              html += result.results.auth.success ? '✓' : '✗';
-              html += ` <strong>Auth:</strong> ${result.results.auth.message}`;
-              html += '</div>';
-            }
-            
             // E2E check
             if (result.results.e2e) {
               html += `<div style="margin-bottom: 6px;">`;
               html += result.results.e2e.success ? '✓' : '✗';
               html += ` <strong>E2E:</strong> ${result.results.e2e.message}`;
+              if (result.results.e2e.requestId) {
+                html += `<br><small style="margin-left: 20px;">Request ID: ${result.results.e2e.requestId}</small>`;
+              }
               html += '</div>';
             }
             

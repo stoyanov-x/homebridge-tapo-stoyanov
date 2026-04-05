@@ -206,7 +206,6 @@ class PluginUiServer extends HomebridgePluginUiServer {
 
         const results = {
           health: null,
-          auth: null,
           e2e: null,
         };
 
