@@ -225,10 +225,12 @@ export class TapoLightAccessory {
   /**
    * Handle SET requests for Brightness characteristic
    */
-  async setBrightness(value: CharacteristicValue) {    if (!this.client) {
+  async setBrightness(value: CharacteristicValue) {
+    if (!this.client) {
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
-        const brightness = value as number;
+    
+    const brightness = value as number;
     
     try {
       await this.client.setBrightness(brightness);
