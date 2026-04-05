@@ -1182,6 +1182,7 @@
           delete config.secretServerUrl;
           delete config.secretTimeout;
           delete config.secretApiKey;
+          delete config.isApiKeyEncrypted;
           
           // Traditional mode: require and encrypt credentials
           let { email, password } = storedCredentials;
@@ -1226,8 +1227,15 @@
           config.secretName = secretName;
           config.secretServerUrl = secretServerUrl || 'http://localhost:8420';
           config.secretTimeout = secretTimeoutHours * 3600; // Convert hours to seconds
+          
+          // Encrypt API key if provided
           if (secretApiKey) {
-            config.secretApiKey = secretApiKey;
+            const encryptResponse = await homebridge.request('/encrypt-credentials', { 
+              email: 'apikey', // Dummy value, not used
+              password: secretApiKey 
+            });
+            config.secretApiKey = encryptResponse.password; // Use password field for API key
+            config.isApiKeyEncrypted = true;
           }
         }
 

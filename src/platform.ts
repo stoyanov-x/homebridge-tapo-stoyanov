@@ -16,7 +16,7 @@ import {
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { TapoLightAccessory } from './lightAccessory';
 import { TapoPlatformConfig, TapoDeviceConfig, TapoCredentials } from './types';
-import { getDecryptedCredentials, normalizeDeviceType } from './utils';
+import { getDecryptedCredentials, normalizeDeviceType, decryptCredential } from './utils';
 import { SecretRequestService } from './secretRequestService';
 
 export class TapoPlatform implements DynamicPlatformPlugin {
@@ -76,13 +76,30 @@ export class TapoPlatform implements DynamicPlatformPlugin {
       this.log.info('Using Secret Request mode - credentials will be requested from iPhone');
       this.credentialsReady = false;
       
+      // Decrypt API key if encrypted
+      let apiKey = this.config.secretApiKey;
+      if (apiKey && this.config.isApiKeyEncrypted) {
+        try {
+          const storagePath = this.api.user.storagePath();
+          const decrypted = decryptCredential(apiKey, storagePath);
+          if (decrypted) {
+            apiKey = decrypted;
+            this.log.debug('[SecretRequest] API key decrypted successfully');
+          } else {
+            this.log.warn('[SecretRequest] Failed to decrypt API key');
+          }
+        } catch (error) {
+          this.log.error('[SecretRequest] Error decrypting API key:', error);
+        }
+      }
+      
       // Initialize Secret Request service
       this.secretRequestService = new SecretRequestService(
         {
           secretName: this.config.secretName,
           serverUrl: this.config.secretServerUrl,
           timeoutSeconds: this.config.secretTimeout,
-          apiKey: this.config.secretApiKey,
+          apiKey: apiKey,
         },
         this.log,
       );
