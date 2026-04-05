@@ -1615,11 +1615,18 @@
     async function testSecretRequestServer() {
       const serverUrl = document.getElementById('secret-server-url').value.trim();
       const apiKey = document.getElementById('secret-api-key').value.trim();
+      const secretName = document.getElementById('secret-name').value.trim();
+      const secretTimeoutHours = parseInt(document.getElementById('secret-timeout').value) || 12;
       const resultDiv = document.getElementById('secret-test-result');
       const btn = document.getElementById('btn-test-secret-server');
       
       if (!serverUrl) {
         alert('Please enter a server URL');
+        return;
+      }
+      
+      if (!secretName) {
+        alert('Please enter a secret name');
         return;
       }
       
@@ -1633,6 +1640,8 @@
         const result = await homebridge.request('/test-secret-server', {
           serverUrl,
           apiKey: apiKey || undefined,
+          secretName,
+          secretTimeout: secretTimeoutHours * 3600, // Convert hours to seconds
         });
         
         if (result.success) {

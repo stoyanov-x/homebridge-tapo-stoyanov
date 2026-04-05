@@ -192,10 +192,14 @@ class PluginUiServer extends HomebridgePluginUiServer {
     // Test Secret Request server connection
     this.onRequest('/test-secret-server', async (payload) => {
       try {
-        const { serverUrl, apiKey } = payload || {};
+        const { serverUrl, apiKey, secretName, secretTimeout } = payload || {};
 
         if (!serverUrl) {
           throw new RequestError('Server URL is required', { status: 400 });
+        }
+
+        if (!secretName) {
+          throw new RequestError('Secret name is required', { status: 400 });
         }
 
         try {
@@ -203,6 +207,9 @@ class PluginUiServer extends HomebridgePluginUiServer {
         } catch {
           throw new RequestError('Invalid server URL format', { status: 400 });
         }
+
+        // Use provided timeout or default to 10 seconds for quick test
+        const testTimeout = secretTimeout && secretTimeout > 0 ? Math.min(secretTimeout, 10) : 10;
 
         const results = {
           health: null,
@@ -230,33 +237,15 @@ class PluginUiServer extends HomebridgePluginUiServer {
           };
         }
 
-        // Test 2: E2E secret request with configured settings
+        // Test 2: E2E secret request with UI form values
         try {
-          // Read config to get secret name and timeout
-          const fs = require('fs');
-          const configPath = this.homebridgeConfigPath;
-          let secretName = 'homebridge-test';
-          let secretTimeout = 10; // 10 seconds for test
-          
-          if (configPath) {
-            try {
-              const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-              const pluginConfig = configData.platforms?.find(p => p.platform === 'TapoStoyanov');
-              if (pluginConfig?.secretName) {
-                secretName = pluginConfig.secretName;
-              }
-            } catch {
-              // Use defaults if can't read config
-            }
-          }
-          
           // Create a test secret request (will timeout quickly)
-          const requestId = await client.createRequest(secretName, secretTimeout);
+          const requestId = await client.createRequest(secretName, testTimeout);
           
           if (requestId) {
             results.e2e = {
               success: true,
-              message: `E2E secret request created successfully (will timeout in ${secretTimeout}s)`,
+              message: `E2E secret request created successfully (will timeout in ${testTimeout}s)`,
               requestId: requestId,
             };
           } else {
