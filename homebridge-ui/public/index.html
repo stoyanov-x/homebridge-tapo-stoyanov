@@ -1640,10 +1640,6 @@
           let html = '<div style="padding: 12px; border-radius: 4px; background: #d4edda; border: 1px solid #c3e6cb;">';
           html += '<strong style="color: #155724;">✅ All Tests Passed</strong>';
           
-          if (result.version) {
-            html += `<div style="margin-top: 8px; font-size: 12px; color: #155724;"><strong>Server Version:</strong> ${result.version}</div>`;
-          }
-          
           if (result.results) {
             html += '<div style="margin-top: 12px; font-size: 13px;">';
             
@@ -1663,6 +1659,14 @@
               if (result.results.auth.warning) {
                 html += ' <span style="color: #856404;">⚠</span>';
               }
+              html += '</div>';
+            }
+            
+            // E2E check
+            if (result.results.e2e) {
+              html += `<div style="margin-bottom: 6px;">`;
+              html += result.results.e2e.success ? '✓' : '✗';
+              html += ` <strong>E2E:</strong> ${result.results.e2e.message}`;
               html += '</div>';
             }
             
@@ -1693,6 +1697,14 @@
               html += `<div style="margin-bottom: 6px;">`;
               html += result.results.auth.success ? '✓' : '✗';
               html += ` <strong>Auth:</strong> ${result.results.auth.message}`;
+              html += '</div>';
+            }
+            
+            // E2E check
+            if (result.results.e2e) {
+              html += `<div style="margin-bottom: 6px;">`;
+              html += result.results.e2e.success ? '✓' : '✗';
+              html += ` <strong>E2E:</strong> ${result.results.e2e.message}`;
               html += '</div>';
             }
             

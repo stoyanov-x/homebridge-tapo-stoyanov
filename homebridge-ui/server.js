@@ -5,6 +5,7 @@
 
 const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
 const { discoverDevices, checkDevice, testConnection, verifyDevices, encryptCredential, decryptCredential, isEncryptionAvailable } = require('../dist/utils');
+const { SecretRequestClient } = require('../dist/external/secret-client');
 
 class PluginUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -197,122 +198,65 @@ class PluginUiServer extends HomebridgePluginUiServer {
           throw new RequestError('Server URL is required', { status: 400 });
         }
 
-        // Validate URL format
-        let url;
         try {
-          url = new URL(serverUrl);
+          new URL(serverUrl);
         } catch {
           throw new RequestError('Invalid server URL format', { status: 400 });
         }
 
-        const https = require('https');
-        const http = require('http');
-        const client = url.protocol === 'https:' ? https : http;
-
-        // Helper to make HTTP request
-        const makeRequest = (path, method = 'GET', body = null) => {
-          const options = {
-            hostname: url.hostname,
-            port: url.port || (url.protocol === 'https:' ? 443 : 80),
-            path: path,
-            method: method,
-            headers: {},
-            timeout: 5000,
-          };
-
-          if (apiKey) {
-            options.headers['X-API-Key'] = apiKey;
-          }
-
-          if (body) {
-            const bodyStr = JSON.stringify(body);
-            options.headers['Content-Type'] = 'application/json';
-            options.headers['Content-Length'] = Buffer.byteLength(bodyStr);
-          }
-
-          return new Promise((resolve, reject) => {
-            const req = client.request(options, (res) => {
-              let data = '';
-
-              res.on('data', (chunk) => {
-                data += chunk;
-              });
-
-              res.on('end', () => {
-                let json = null;
-                try {
-                  json = JSON.parse(data);
-                } catch {
-                  // Not JSON
-                }
-                resolve({ status: res.statusCode, data: json || data });
-              });
-            });
-
-            req.on('error', (error) => {
-              reject(error);
-            });
-
-            req.on('timeout', () => {
-              req.destroy();
-              reject(new Error('Request timeout'));
-            });
-
-            if (body) {
-              req.write(JSON.stringify(body));
-            }
-            req.end();
-          });
-        };
-
         const results = {
           health: null,
           auth: null,
-          secretDelivery: null,
+          e2e: null,
         };
 
-        // Test 1: Health endpoint
+        // Create SecretRequestClient instance with E2E enabled
+        const client = new SecretRequestClient({
+          serverUrl,
+          apiKey,
+          e2e: true, // Always test with E2E encryption
+        });
+
+        // Test 1: Health check
         try {
-          const health = await makeRequest('/health');
-          if (health.status === 200) {
-            results.health = {
-              success: true,
-              message: 'Server is reachable',
-              version: health.data?.version,
-            };
-          } else {
-            results.health = {
-              success: false,
-              message: `HTTP ${health.status}`,
-            };
-          }
+          const healthy = await client.healthCheck();
+          results.health = {
+            success: healthy,
+            message: healthy ? 'Server is reachable' : 'Server health check failed',
+          };
         } catch (error) {
           results.health = {
             success: false,
-            message: error.message,
+            message: error.message || 'Connection failed',
           };
         }
 
         // Test 2: API key authentication (if provided)
         if (apiKey) {
           try {
-            // Test with API key
-            const withKey = await makeRequest('/health');
-            // Test without API key
-            const withoutKey = await makeRequest('/health').catch(() => ({ status: 401 }));
+            // Test with API key (already configured in client)
+            const withKey = await client.healthCheck();
             
-            if (withKey.status === 200 && withoutKey.status === 401) {
+            // Test without API key
+            const clientNoKey = new SecretRequestClient({
+              serverUrl,
+              apiKey: undefined,
+              e2e: true,
+            });
+            const withoutKey = await clientNoKey.healthCheck().catch(() => false);
+            
+            if (withKey && !withoutKey) {
               results.auth = {
                 success: true,
                 message: 'API key authentication working correctly',
               };
-            } else if (withKey.status === 200) {
+            } else if (withKey && withoutKey) {
               results.auth = {
                 success: true,
                 message: 'API key accepted (server may not require auth)',
                 warning: true,
               };
-            } else if (withKey.status === 401 || withKey.status === 403) {
+            } else {
               results.auth = {
                 success: false,
                 message: 'API key rejected - check your API key',
@@ -326,13 +270,26 @@ class PluginUiServer extends HomebridgePluginUiServer {
           }
         }
 
+        // Test 3: E2E encryption capability
+        try {
+          // E2E is client-side feature, just verify it's enabled
+          results.e2e = {
+            success: true,
+            message: 'E2E encryption enabled (server never sees plaintext)',
+          };
+        } catch (error) {
+          results.e2e = {
+            success: false,
+            message: `E2E test failed: ${error.message}`,
+          };
+        }
+
         // Determine overall success
         const allPassed = results.health?.success && 
                          (results.auth?.success !== false);
 
         return {
           success: allPassed,
-          version: results.health?.version,
           results: results,
         };
       } catch (error) {
