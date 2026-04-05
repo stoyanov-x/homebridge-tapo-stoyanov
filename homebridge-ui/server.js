@@ -308,31 +308,40 @@ class PluginUiServer extends HomebridgePluginUiServer {
    */
   async getStoredCredentials() {
     try {
-      const pluginConfig = await this.getPluginConfig();
+      // Read config.json from disk (server-side doesn't have getPluginConfig method)
+      const fs = require('fs');
+      const configPath = this.homebridgeConfigPath;
       
-      if (!pluginConfig || pluginConfig.length === 0) {
-        console.log('[Tapo UI] getStoredCredentials: No plugin config found');
+      if (!configPath) {
+        console.log('[Tapo UI] getStoredCredentials: No config path available');
         return null;
       }
       
-      const config = pluginConfig[0];
-      console.log('[Tapo UI] getStoredCredentials: credentialType =', config.credentialType, ', has email:', !!config.email, ', has password:', !!config.password, ', isEncrypted:', !!config.isEncrypted);
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const pluginConfig = configData.platforms?.find(p => p.platform === 'TapoPlatform');
+      
+      if (!pluginConfig) {
+        console.log('[Tapo UI] getStoredCredentials: No TapoPlatform config found');
+        return null;
+      }
+      
+      console.log('[Tapo UI] getStoredCredentials: credentialType =', pluginConfig.credentialType, ', has email:', !!pluginConfig.email, ', has password:', !!pluginConfig.password, ', isEncrypted:', !!pluginConfig.isEncrypted);
       
       // Check credential type - only traditional mode has email/password
-      if (config.credentialType === 'secret-request') {
+      if (pluginConfig.credentialType === 'secret-request') {
         console.log('[Tapo UI] getStoredCredentials: Using Secret Request mode - no stored credentials');
         return null;
       }
       
-      if (!config.email || !config.password) {
+      if (!pluginConfig.email || !pluginConfig.password) {
         console.log('[Tapo UI] getStoredCredentials: Missing email or password');
         return null;
       }
       
       // If credentials are encrypted, decrypt them
-      if (config.isEncrypted) {
-        const email = decryptCredential(config.email, this.homebridgeStoragePath);
-        const password = decryptCredential(config.password, this.homebridgeStoragePath);
+      if (pluginConfig.isEncrypted) {
+        const email = decryptCredential(pluginConfig.email, this.homebridgeStoragePath);
+        const password = decryptCredential(pluginConfig.password, this.homebridgeStoragePath);
         
         if (!email || !password) {
           console.warn('[Tapo] Failed to decrypt stored credentials');
@@ -345,7 +354,7 @@ class PluginUiServer extends HomebridgePluginUiServer {
       
       // Return plaintext credentials
       console.log('[Tapo UI] getStoredCredentials: Returning plaintext credentials');
-      return { email: config.email, password: config.password };
+      return { email: pluginConfig.email, password: pluginConfig.password };
     } catch (error) {
       console.warn('[Tapo] Error getting stored credentials:', error.message);
       return null;
