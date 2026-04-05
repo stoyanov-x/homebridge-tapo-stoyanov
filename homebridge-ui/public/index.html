@@ -1455,10 +1455,23 @@
               }
             }
           } else {
-            // Traditional mode - show placeholders for encrypted credentials
-            if (pluginConfig.email && pluginConfig.isEncrypted) {
-              document.getElementById('email').placeholder = 'Enter to update credentials';
-              document.getElementById('password').placeholder = 'Enter to update credentials';
+            // Traditional mode
+            document.getElementById('credential-type-traditional').checked = true;
+            document.getElementById('credential-type-secret').checked = false;
+            
+            // Load email/password
+            if (pluginConfig.email) {
+              if (pluginConfig.isEncrypted) {
+                // Show placeholder for encrypted credentials
+                document.getElementById('email').placeholder = 'Enter to update credentials';
+                document.getElementById('password').placeholder = 'Enter to update credentials';
+              } else {
+                // Legacy plaintext credentials (shouldn't happen after save, but handle it)
+                document.getElementById('email').value = pluginConfig.email;
+                if (pluginConfig.password) {
+                  document.getElementById('password').value = pluginConfig.password;
+                }
+              }
             }
           }
           
