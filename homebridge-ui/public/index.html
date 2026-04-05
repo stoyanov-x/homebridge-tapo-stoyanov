@@ -1636,11 +1636,15 @@
       resultDiv.className = 'hidden';
       
       // Show waiting message
+      const timeoutDisplay = secretTimeoutHours >= 1 
+        ? `${secretTimeoutHours} hour${secretTimeoutHours !== 1 ? 's' : ''}`
+        : `${secretTimeoutHours * 3600} seconds`;
+      
       resultDiv.className = '';
       resultDiv.innerHTML = '<div style="padding: 12px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7;">' +
         '<strong style="color: #856404;">⏳ Testing in progress...</strong>' +
         '<div style="margin-top: 8px; font-size: 13px; color: #856404;">' +
-        `Creating secret request and waiting up to ${secretTimeoutHours * 3600}s for approval on iPhone...` +
+        `Creating secret request and waiting up to ${timeoutDisplay} for approval on iPhone...` +
         '</div>' +
         '</div>';
       

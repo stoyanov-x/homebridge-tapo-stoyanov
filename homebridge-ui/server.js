@@ -208,8 +208,8 @@ class PluginUiServer extends HomebridgePluginUiServer {
           throw new RequestError('Invalid server URL format', { status: 400 });
         }
 
-        // Use provided timeout or default to 10 seconds for quick test
-        const testTimeout = secretTimeout && secretTimeout > 0 ? Math.min(secretTimeout, 10) : 10;
+        // Use provided timeout from UI (in seconds), default to 30s if not specified
+        const testTimeout = secretTimeout && secretTimeout > 0 ? secretTimeout : 30;
 
         const results = {
           health: null,
