@@ -122,6 +122,11 @@ export class TapoPlatform implements DynamicPlatformPlugin {
         });
       }
     });
+    
+    // Handle Homebridge shutdown
+    this.api.on('shutdown', () => {
+      this.cleanup();
+    });
   }
 
   /**
