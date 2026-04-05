@@ -653,15 +653,16 @@
         </div>
 
         <p style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; color: #856404;">
-          ⚠️ <strong>Note:</strong> Secret Request requires the secret-request server to be running and credentials stored in your iPhone's Scriptable Keychain. 
-          Devices will appear in HomeKit immediately but show "No Response" until you approve the request on your iPhone.
+          ⚠️ <strong>Note:</strong> When you click Continue, this UI will create a secret request and wait for you to approve it on your iPhone (via Scriptable notification). 
+          Once approved, your credentials will be retrieved and device discovery will begin automatically.
         </p>
 
         <button 
           class="btn btn-primary btn-block"
+          id="btn-request-credentials"
           onclick="continueWithSecretRequest()"
         >
-          Continue (Skip Discovery)
+          Request Credentials & Discover Devices
         </button>
       </div>
     </div>
@@ -1591,24 +1592,140 @@
     }
 
     // Continue with Secret Request mode (skip device discovery)
-    function continueWithSecretRequest() {
+    async function continueWithSecretRequest() {
       const secretName = document.getElementById('secret-name').value.trim();
+      const serverUrl = document.getElementById('secret-server-url').value.trim();
+      const apiKey = document.getElementById('secret-api-key').value.trim();
+      const secretTimeoutHours = parseInt(document.getElementById('secret-timeout').value) || 12;
+      const secretTimeout = secretTimeoutHours * 3600; // Convert to seconds
       
       if (!secretName) {
         alert('Please enter a secret name');
         return;
       }
       
-      // Hide credentials section
-      document.getElementById('step-credentials').classList.add('hidden');
+      if (!serverUrl) {
+        alert('Please enter a server URL');
+        return;
+      }
       
-      // Show manual device addition (since we can't discover without credentials)
-      document.getElementById('step-manual').classList.remove('hidden');
-      document.getElementById('step-settings').classList.remove('hidden');
-      document.getElementById('save-section').classList.remove('hidden');
+      // Disable button and show loading state
+      const btn = document.getElementById('btn-request-credentials');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading-spinner"></span> Requesting credentials...';
       
-      // Show info message
-      alert('Secret Request configured. Add devices manually by IP address below.\n\nDevices will appear in HomeKit immediately but show "No Response" until you approve the secret request on your iPhone after Homebridge restarts.');
+      // Collapse credentials section to show waiting state
+      document.getElementById('step-credentials').classList.add('credentials-collapsed');
+      
+      // Show discovery section with waiting message
+      document.getElementById('step-discovery').classList.remove('hidden');
+      const discoveryLoading = document.getElementById('discovery-loading');
+      discoveryLoading.classList.remove('hidden');
+      
+      const timeoutDisplay = secretTimeoutHours >= 1 
+        ? `${secretTimeoutHours} hour${secretTimeoutHours !== 1 ? 's' : ''}`
+        : `${secretTimeout} seconds`;
+      
+      const progressText = document.getElementById('discovery-progress-text');
+      if (progressText) {
+        progressText.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 16px; margin-bottom: 12px;">📱 Waiting for approval on iPhone...</div>
+            <div style="font-size: 13px; color: #666;">
+              Check your iPhone for a push notification from Scriptable.<br>
+              Approve the secret request to continue with device discovery.<br>
+              <br>
+              <strong>Timeout:</strong> ${timeoutDisplay}
+            </div>
+          </div>
+        `;
+      }
+      
+      try {
+        // Request credentials via Secret Request
+        const response = await homebridge.request('/request-credentials', {
+          serverUrl,
+          apiKey: apiKey || undefined,
+          secretName,
+          secretTimeout,
+        });
+        
+        if (!response.success || !response.email || !response.password) {
+          throw new Error('Invalid response from server');
+        }
+        
+        // Store credentials for discovery and later use
+        storedCredentials = { 
+          email: response.email, 
+          password: response.password 
+        };
+        
+        // Show logged-in badge
+        document.getElementById('logged-in-email').textContent = response.email;
+        document.getElementById('logged-in-badge').classList.remove('hidden');
+        
+        // Update loading message
+        if (progressText) {
+          progressText.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 16px; margin-bottom: 12px;">✅ Credentials received!</div>
+              <div style="font-size: 13px; color: #666;">
+                Now discovering devices on your network...<br>
+                Request ID: ${response.requestId}
+              </div>
+            </div>
+          `;
+        }
+        
+        // Now discover devices using the received credentials
+        const discoveryResponse = await homebridge.request('/discover', { 
+          email: response.email, 
+          password: response.password 
+        });
+        
+        discoveredDevices = discoveryResponse.devices || [];
+        
+        if (discoveredDevices.length === 0) {
+          discoveryLoading.classList.add('hidden');
+          document.getElementById('no-devices').classList.remove('hidden');
+        } else {
+          renderDevices();
+          discoveryLoading.classList.add('hidden');
+          document.getElementById('device-list').classList.remove('hidden');
+        }
+        
+        // Hide credentials section, show manual entry, settings, and save
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        document.getElementById('step-credentials').classList.add('hidden');
+        document.getElementById('step-manual').classList.remove('hidden');
+        document.getElementById('step-settings').classList.remove('hidden');
+        document.getElementById('save-section').classList.remove('hidden');
+        
+      } catch (error) {
+        console.error('Secret request error:', error);
+        
+        // Show error message
+        if (progressText) {
+          progressText.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 16px; margin-bottom: 12px; color: #d32f2f;">❌ Failed to get credentials</div>
+              <div style="font-size: 13px; color: #666;">
+                ${error.message || 'Unknown error'}<br>
+                <br>
+                Please try again or use traditional credentials mode.
+              </div>
+            </div>
+          `;
+        }
+        
+        // Un-collapse credentials section so user can try again
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        discoveryLoading.classList.add('hidden');
+        
+        // Re-enable button
+        btn.disabled = false;
+        btn.innerHTML = 'Request Credentials & Discover Devices';
+      }
     }
 
     // Test Secret Request server connection

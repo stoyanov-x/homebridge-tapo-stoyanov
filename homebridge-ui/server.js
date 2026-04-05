@@ -336,6 +336,71 @@ class PluginUiServer extends HomebridgePluginUiServer {
       }
     });
 
+    // Request credentials via Secret Request and wait for approval
+    this.onRequest('/request-credentials', async (payload) => {
+      try {
+        const { serverUrl, apiKey, secretName, secretTimeout } = payload || {};
+
+        if (!serverUrl) {
+          throw new RequestError('Server URL is required', { status: 400 });
+        }
+
+        if (!secretName) {
+          throw new RequestError('Secret name is required', { status: 400 });
+        }
+
+        try {
+          new URL(serverUrl);
+        } catch {
+          throw new RequestError('Invalid server URL format', { status: 400 });
+        }
+
+        // Create SecretRequestClient instance with E2E enabled
+        const client = new SecretRequestClient({
+          serverUrl,
+          apiKey,
+          e2e: true, // Always use E2E encryption
+        });
+
+        // Create secret request
+        const requestId = await client.createRequest(secretName, secretTimeout);
+        
+        if (!requestId) {
+          throw new RequestError('Failed to create secret request', { status: 500 });
+        }
+
+        // Wait for user to approve on iPhone
+        const secret = await client.waitForRequest(requestId, secretTimeout);
+        
+        // Validate that we got email and password
+        if (typeof secret !== 'object' || !secret.email || !secret.password) {
+          throw new RequestError('Invalid secret format - expected email and password fields', { status: 400 });
+        }
+
+        return {
+          success: true,
+          requestId: requestId,
+          email: secret.email,
+          password: secret.password,
+        };
+      } catch (error) {
+        console.error('Request credentials error:', error);
+        
+        // Map SecretRequestError codes to user-friendly messages
+        if (error.code === 'denied') {
+          throw new RequestError('Secret request was denied on iPhone', { status: 403 });
+        } else if (error.code === 'timeout') {
+          throw new RequestError('Request timed out - no response from iPhone', { status: 408 });
+        } else if (error.code === 'cancelled') {
+          throw new RequestError('Secret request was cancelled', { status: 409 });
+        } else if (error.response?.status === 401 || error.response?.status === 403) {
+          throw new RequestError('API key authentication failed', { status: 401 });
+        } else {
+          throw new RequestError(error.message || 'Failed to request credentials', { status: 500 });
+        }
+      }
+    });
+
     // Ready
     this.ready();
   }
