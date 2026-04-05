@@ -318,10 +318,10 @@ class PluginUiServer extends HomebridgePluginUiServer {
       }
       
       const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      const pluginConfig = configData.platforms?.find(p => p.platform === 'TapoPlatform');
+      const pluginConfig = configData.platforms?.find(p => p.platform === 'TapoStoyanov');
       
       if (!pluginConfig) {
-        console.log('[Tapo UI] getStoredCredentials: No TapoPlatform config found');
+        console.log('[Tapo UI] getStoredCredentials: No TapoStoyanov config found');
         return null;
       }
       
