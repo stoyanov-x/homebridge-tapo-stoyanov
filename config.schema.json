@@ -43,8 +43,8 @@
       "secretName": {
         "title": "Secret Name",
         "type": "string",
-        "description": "Name of the secret stored in iOS Keychain (e.g., 'tapo-credentials') - Required for Secret Request mode",
-        "placeholder": "tapo-credentials"
+        "description": "Name of the secret stored in iOS Keychain (e.g., 'tapo-admin') - Required for Secret Request mode",
+        "placeholder": "tapo-admin"
       },
       "secretServerUrl": {
         "title": "Secret Request Server URL",

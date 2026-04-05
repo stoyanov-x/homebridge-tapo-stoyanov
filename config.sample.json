@@ -37,7 +37,7 @@
     "platform": "TapoStoyanov",
     "name": "Tapo Platform",
     "credentialType": "secret-request",
-    "secretName": "tapo-credentials",
+    "secretName": "tapo-admin",
     "secretServerUrl": "http://localhost:8420",
     "secretTimeout": 43200,
     "secretApiKey": "your-api-key-here",

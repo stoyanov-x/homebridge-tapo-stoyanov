@@ -136,7 +136,7 @@ Using the Scriptable SecretRequest script:
 - Open Scriptable app on your iPhone
 - Run the SecretRequest script
 - Select "Store Multi-Part Secret"
-- Name: `tapo-credentials`
+- Name: `tapo-admin`
 - Fields:
   - `email`: your-tapo-email@example.com
   - `password`: your-tapo-password
@@ -146,7 +146,7 @@ Using the Scriptable SecretRequest script:
 Via Custom UI:
 1. Open plugin settings
 2. Select "Secret Request (iPhone Push)" as credential method
-3. Enter secret name: `tapo-credentials`
+3. Enter secret name: `tapo-admin`
 4. Server URL: `http://localhost:8420` (or your server address)
 5. Timeout: `12` hours (configurable 1-48 hours)
 6. Add devices manually by IP address (discovery isn't available without credentials)
@@ -159,7 +159,7 @@ Or manually in `config.json`:
   "platform": "TapoStoyanov",
   "name": "Tapo Platform",
   "credentialType": "secret-request",
-  "secretName": "tapo-credentials",
+  "secretName": "tapo-admin",
   "secretServerUrl": "http://localhost:8420",
   "secretTimeout": 43200,
   "pollingInterval": 30,
@@ -182,7 +182,7 @@ Devices will appear in HomeKit immediately but show "No Response" until you appr
 | Field | Required | Description |
 |-------|----------|-------------|
 | `credentialType` | Yes | Must be `secret-request` |
-| `secretName` | Yes | Name of the secret stored in iOS Keychain (e.g., `tapo-credentials`) |
+| `secretName` | Yes | Name of the secret stored in iOS Keychain (e.g., `tapo-admin`) |
 | `secretServerUrl` | Yes | URL of the secret-request server (default: `http://localhost:8420`) |
 | `secretTimeout` | No | Seconds to wait for secret approval (default: 43200 = 12 hours, range: 3600-172800) |
 | `secretApiKey` | No | API key for server authentication (can also use `SECRET_API_KEY` environment variable) |
@@ -193,7 +193,7 @@ Devices will appear in HomeKit immediately but show "No Response" until you appr
 - Check Homebridge logs for `[SecretRequest]` messages
 - Verify secret-request server is running: `curl http://localhost:8420/health`
 - Check your iPhone for pending push notifications (ntfy app)
-- Ensure secret name matches: `tapo-credentials`
+- Ensure secret name matches: `tapo-admin`
 - Verify credentials are stored in iOS Keychain (run Scriptable script → "List Secrets")
 
 **Request times out:**
