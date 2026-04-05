@@ -1446,7 +1446,13 @@
               document.getElementById('secret-timeout').value = Math.round(pluginConfig.secretTimeout / 3600); // Convert seconds to hours
             }
             if (pluginConfig.secretApiKey) {
-              document.getElementById('secret-api-key').value = pluginConfig.secretApiKey;
+              // Don't show encrypted API key - just show placeholder
+              if (pluginConfig.isApiKeyEncrypted) {
+                document.getElementById('secret-api-key').placeholder = '••••••••••••••••';
+              } else {
+                // Legacy plaintext API key (shouldn't happen after save, but handle it)
+                document.getElementById('secret-api-key').value = pluginConfig.secretApiKey;
+              }
             }
           } else {
             // Traditional mode - show placeholders for encrypted credentials
