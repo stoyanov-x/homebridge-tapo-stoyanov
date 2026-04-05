@@ -237,22 +237,64 @@ class PluginUiServer extends HomebridgePluginUiServer {
           };
         }
 
-        // Test 2: E2E secret request with UI form values
+        // Test 2: E2E secret request with UI form values - FULL E2E TEST
         try {
-          // Create a test secret request (will timeout quickly)
+          // Create a test secret request
           const requestId = await client.createRequest(secretName, testTimeout);
           
-          if (requestId) {
-            results.e2e = {
-              success: true,
-              message: `E2E secret request created successfully (will timeout in ${testTimeout}s)`,
-              requestId: requestId,
-            };
-          } else {
+          if (!requestId) {
             results.e2e = {
               success: false,
               message: 'Failed to create secret request',
             };
+          } else {
+            // Now actually wait for user to approve/reject on iPhone!
+            try {
+              const secret = await client.waitForRequest(requestId, testTimeout);
+              
+              // Success! Got credentials back
+              const hasEmail = typeof secret === 'object' && secret.email;
+              const hasPassword = typeof secret === 'object' && secret.password;
+              
+              results.e2e = {
+                success: true,
+                message: 'E2E test complete - secret received and decrypted successfully',
+                requestId: requestId,
+                credentialsReceived: hasEmail && hasPassword,
+                secretType: typeof secret === 'object' ? 'multi-part' : 'string',
+              };
+            } catch (waitError) {
+              // Handle approval/rejection outcomes
+              if (waitError.code === 'denied') {
+                results.e2e = {
+                  success: false,
+                  message: 'Secret request was denied on iPhone',
+                  requestId: requestId,
+                  outcome: 'denied',
+                };
+              } else if (waitError.code === 'timeout') {
+                results.e2e = {
+                  success: false,
+                  message: `Request timed out after ${testTimeout}s - no response from iPhone`,
+                  requestId: requestId,
+                  outcome: 'timeout',
+                };
+              } else if (waitError.code === 'cancelled') {
+                results.e2e = {
+                  success: false,
+                  message: 'Secret request was cancelled',
+                  requestId: requestId,
+                  outcome: 'cancelled',
+                };
+              } else {
+                results.e2e = {
+                  success: false,
+                  message: `E2E wait failed: ${waitError.message}`,
+                  requestId: requestId,
+                  outcome: 'error',
+                };
+              }
+            }
           }
         } catch (error) {
           // Check if it's an auth error

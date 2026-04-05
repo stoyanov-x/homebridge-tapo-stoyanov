@@ -1,6 +1,6 @@
 {
   "name": "homebridge-tapo-stoyanov",
-  "version": "2.0.7",
+  "version": "2.0.8",
   "description": "Homebridge plugin for Tapo smart devices (lights, bulbs) that are not Matter compatible",
   "main": "dist/index.js",
   "packageManager": "pnpm@9.12.3",

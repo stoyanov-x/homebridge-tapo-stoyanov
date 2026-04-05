@@ -1635,6 +1635,15 @@
       btn.innerHTML = '⏳ Testing...';
       resultDiv.className = 'hidden';
       
+      // Show waiting message
+      resultDiv.className = '';
+      resultDiv.innerHTML = '<div style="padding: 12px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7;">' +
+        '<strong style="color: #856404;">⏳ Testing in progress...</strong>' +
+        '<div style="margin-top: 8px; font-size: 13px; color: #856404;">' +
+        `Creating secret request and waiting up to ${secretTimeoutHours * 3600}s for approval on iPhone...` +
+        '</div>' +
+        '</div>';
+      
       try {
         // Use backend to test server (avoids CORS, keeps API key server-side)
         const result = await homebridge.request('/test-secret-server', {
@@ -1668,6 +1677,12 @@
               if (result.results.e2e.requestId) {
                 html += `<br><small style="margin-left: 20px; color: #155724;">Request ID: ${result.results.e2e.requestId}</small>`;
               }
+              if (result.results.e2e.credentialsReceived) {
+                html += `<br><small style="margin-left: 20px; color: #155724;">✓ Email and password received</small>`;
+              }
+              if (result.results.e2e.secretType) {
+                html += `<br><small style="margin-left: 20px; color: #155724;">Secret type: ${result.results.e2e.secretType}</small>`;
+              }
               html += '</div>';
             }
             
@@ -1699,7 +1714,10 @@
               html += result.results.e2e.success ? '✓' : '✗';
               html += ` <strong>E2E:</strong> ${result.results.e2e.message}`;
               if (result.results.e2e.requestId) {
-                html += `<br><small style="margin-left: 20px;">Request ID: ${result.results.e2e.requestId}</small>`;
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Request ID: ${result.results.e2e.requestId}</small>`;
+              }
+              if (result.results.e2e.outcome) {
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Outcome: ${result.results.e2e.outcome}</small>`;
               }
               html += '</div>';
             }
