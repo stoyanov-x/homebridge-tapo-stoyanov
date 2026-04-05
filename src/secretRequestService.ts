@@ -138,12 +138,20 @@ export class SecretRequestService extends EventEmitter {
       // Start periodic "still waiting" messages
       this.startWaitingMessages();
 
-      // Request the secret (this will block until delivered/denied/timeout)
-      this.log.debug('[SecretRequest] Sending secret request...');
-      const secret = await this.client.requestSecretSync(
+      // Create the request first to get request ID
+      this.log.debug('[SecretRequest] Creating secret request...');
+      this.requestId = await this.client.createRequest(
         this.config.secretName,
         this.config.timeoutSeconds,
       );
+      this.log.info(`[SecretRequest] Request created with ID: ${this.requestId}`);
+      this.log.info('[SecretRequest] Waiting for approval on iPhone...');
+      
+      // Wait for the secret to be delivered
+      const secret = await this.client.waitForRequest(this.requestId);
+
+      // Log secret structure (without revealing actual values)
+      this.logSecretStructure(secret);
 
       // Parse the secret into credentials
       const credentials = this.parseSecret(secret);
@@ -152,6 +160,8 @@ export class SecretRequestService extends EventEmitter {
         throw new Error('Failed to parse credentials from secret. Expected email/password fields.');
       }
 
+      // Log censored credentials for debugging
+      this.log.info(`[SecretRequest] Credentials received: email=${this.censorEmail(credentials.email)}`);
       this.log.info('[SecretRequest] Secret received successfully!');
       this.setState('delivered');
       
@@ -174,11 +184,13 @@ export class SecretRequestService extends EventEmitter {
       const password = secret.password || secret.pass || '';
       
       if (!email || !password) {
-        this.log.warn('[SecretRequest] Multi-part secret missing email or password field');
-        this.log.warn('[SecretRequest] Available fields:', Object.keys(secret).join(', '));
+        this.log.error('[SecretRequest] Multi-part secret missing required fields');
+        this.log.error('[SecretRequest] Available fields:', Object.keys(secret).join(', '));
+        this.log.error('[SecretRequest] Expected fields: email (or username/user) AND password (or pass)');
         return null;
       }
       
+      this.log.debug(`[SecretRequest] Successfully parsed multi-part secret (email field: ${email ? 'present' : 'missing'}, password field: ${password ? 'present' : 'missing'})`);
       return { email, password };
     }
     
@@ -186,16 +198,21 @@ export class SecretRequestService extends EventEmitter {
     if (typeof secret === 'string') {
       const parts = secret.split(':');
       if (parts.length === 2) {
+        this.log.debug('[SecretRequest] Successfully parsed colon-separated string secret');
         return {
           email: parts[0].trim(),
           password: parts[1].trim(),
         };
       }
       
-      this.log.warn('[SecretRequest] Expected multi-part secret or "email:password" format');
+      this.log.error('[SecretRequest] String secret format invalid');
+      this.log.error('[SecretRequest] Expected format: "email:password" (with colon separator)');
+      this.log.error(`[SecretRequest] Received: ${parts.length} parts after splitting by ':'`);
       return null;
     }
     
+    this.log.error('[SecretRequest] Unexpected secret type:', typeof secret);
+    this.log.error('[SecretRequest] Expected: object (multi-part) or string (colon-separated)');
     return null;
   }
 
@@ -329,5 +346,33 @@ export class SecretRequestService extends EventEmitter {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Log secret structure without revealing sensitive values
+   */
+  private logSecretStructure(secret: SecretValue): void {
+    if (isMultiPartSecret(secret)) {
+      const fields = Object.keys(secret).join(', ');
+      this.log.debug(`[SecretRequest] Received multi-part secret with fields: ${fields}`);
+    } else if (typeof secret === 'string') {
+      const hasColon = secret.includes(':');
+      this.log.debug(`[SecretRequest] Received string secret (${secret.length} chars, ${hasColon ? 'colon-separated' : 'plain'})`);
+    } else {
+      this.log.debug(`[SecretRequest] Received secret of type: ${typeof secret}`);
+    }
+  }
+
+  /**
+   * Censor email address for logging
+   */
+  private censorEmail(email: string): string {
+    const parts = email.split('@');
+    if (parts.length !== 2) {
+      return '***';
+    }
+    const [user, domain] = parts;
+    const censoredUser = user.length > 2 ? user.slice(0, 2) + '***' : '***';
+    return `${censoredUser}@${domain}`;
   }
 }
