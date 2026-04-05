@@ -27,7 +27,7 @@ import {
 
 export class TapoLightAccessory {
   private service: Service;
-  private client: TapoClient;
+  private client?: TapoClient;
   private updateInterval?: NodeJS.Timeout;
 
   // Current state cache
@@ -47,9 +47,12 @@ export class TapoLightAccessory {
     private readonly accessory: PlatformAccessory,
     private readonly config: TapoDeviceConfig,
     private readonly log: Logger,
+    private readonly credentialsReady: boolean = true,
   ) {
-    // Initialize the Tapo client with decrypted credentials
-    this.client = new TapoClient(config.ip, this.platform.credentials);
+    // Initialize the Tapo client only if credentials are ready
+    if (credentialsReady) {
+      this.client = new TapoClient(config.ip, this.platform.credentials);
+    }
 
     // Set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -89,35 +92,58 @@ export class TapoLightAccessory {
       .onSet(this.setSaturation.bind(this))
       .onGet(this.getSaturation.bind(this));
 
-    // Initialize device state and start polling
-    this.initialize();
+    // Initialize device state and start polling (skip if credentials not ready)
+    if (credentialsReady) {
+      this.initializeDevice();
+    }
   }
 
   /**
-   * Initialize the accessory - get initial state and start polling
+   * Initialize device state and start polling
+   * Called when accessory is created (if credentials ready) or when credentials arrive later
    */
-  private async initialize() {
+  public async initializeDevice() {
+    // Create client if not already created
+    if (!this.client) {
+      this.client = new TapoClient(this.config.ip, this.platform.credentials);
+    }
+    
     try {
       await this.updateDeviceState();
       
-      // Start polling for state updates
-      const pollingInterval = (this.platform.config.pollingInterval || DEFAULT_POLLING_INTERVAL) * 1000;
-      this.updateInterval = setInterval(() => {
-        this.updateDeviceState().catch(err => {
-          this.log.error(`[${this.config.name}] Poll error:`, err.message);
-        });
-      }, pollingInterval);
-
-      this.log.info(`[${this.config.name}] Initialized at ${this.config.ip}`);
-    } catch (error: any) {
-      this.log.error(`[${this.config.name}] Init failed:`, error.message);
+      // Start polling for state updates (if not already polling)
+      if (!this.updateInterval) {
+        const pollingInterval = (this.platform.config.pollingInterval || DEFAULT_POLLING_INTERVAL) * 1000;
+        this.updateInterval = setInterval(() => {
+          this.updateDeviceState().catch(err => {
+            this.log.error(`[${this.config.name}] Poll error:`, err.message);
+          });
+        }, pollingInterval);
+        
+        this.log.info(`[${this.config.name}] Started polling every ${pollingInterval / 1000}s`);
+      }
+    } catch (error) {
+      this.log.error(`[${this.config.name}] Failed to initialize:`, error);
     }
+  }
+
+  /**
+   * @deprecated Use initializeDevice() instead
+   * Initialize the accessory - get initial state and start polling
+   */
+  private async initialize() {
+    await this.initializeDevice();
   }
 
   /**
    * Update device state from the physical device
    */
   private async updateDeviceState(): Promise<void> {
+    // Skip if client not initialized yet
+    if (!this.client) {
+      return;
+    }
+    
     try {
       const info: TapoDeviceInfo = await this.client.getDeviceInfo();
       
@@ -168,6 +194,10 @@ export class TapoLightAccessory {
    * Handle SET requests for On characteristic
    */
   async setOn(value: CharacteristicValue) {
+    if (!this.client) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    
     const on = value as boolean;
     
     try {
@@ -196,6 +226,10 @@ export class TapoLightAccessory {
    * Handle SET requests for Brightness characteristic
    */
   async setBrightness(value: CharacteristicValue) {
+    if (!this.client) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    
     const brightness = value as number;
     
     try {
@@ -219,6 +253,10 @@ export class TapoLightAccessory {
    * Handle SET requests for ColorTemperature characteristic
    */
   async setColorTemperature(value: CharacteristicValue) {
+    if (!this.client) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    
     const mired = value as number;
     
     try {
@@ -251,6 +289,10 @@ export class TapoLightAccessory {
    * Handle SET requests for Hue characteristic
    */
   async setHue(value: CharacteristicValue) {
+    if (!this.client) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    
     const hue = value as number;
     this.state.Hue = hue;
     
@@ -269,6 +311,10 @@ export class TapoLightAccessory {
    * Handle SET requests for Saturation characteristic
    */
   async setSaturation(value: CharacteristicValue) {
+    if (!this.client) {
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
+    }
+    
     const saturation = value as number;
     this.state.Saturation = saturation;
     
@@ -290,6 +336,10 @@ export class TapoLightAccessory {
   private colorUpdateTimeout?: NodeJS.Timeout;
   
   private async applyColor() {
+    if (!this.client) {
+      return;
+    }
+    
     // Clear any pending color update
     if (this.colorUpdateTimeout) {
       clearTimeout(this.colorUpdateTimeout);
@@ -297,6 +347,10 @@ export class TapoLightAccessory {
 
     // Batch the color update with a small delay
     this.colorUpdateTimeout = setTimeout(async () => {
+      if (!this.client) {
+        return;
+      }
+      
       try {
         await this.client.setColor(this.state.Hue, this.state.Saturation);
         this.log.info(`[${this.config.name}] Color: H${this.state.Hue}° S${this.state.Saturation}%`);
@@ -318,7 +372,9 @@ export class TapoLightAccessory {
       clearTimeout(this.colorUpdateTimeout);
     }
     
-    this.client.close();
+    if (this.client) {
+      this.client.close();
+    }
     this.log.info(`[${this.config.name}] Removed`);
   }
 }

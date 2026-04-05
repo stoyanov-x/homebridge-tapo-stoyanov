@@ -395,6 +395,48 @@
       cursor: pointer;
     }
 
+    /* Credential method radio buttons */
+    .credential-method-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px;
+      border: 2px solid #e5e5e7;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .credential-method-option:hover {
+      border-color: #d2d2d7;
+      background: #fafafa;
+    }
+
+    .credential-method-option input[type="radio"] {
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .credential-method-option input[type="radio"]:checked {
+      accent-color: #007aff;
+    }
+
+    .credential-method-content {
+      flex: 1;
+    }
+
+    .credential-method-content strong {
+      display: block;
+      color: #1d1d1f;
+      margin-bottom: 4px;
+    }
+
+    .credential-method-content .description {
+      font-size: 12px;
+      color: #86868b;
+      line-height: 1.4;
+    }
+
     .empty-state {
       text-align: center;
       padding: 60px 20px;
@@ -472,38 +514,157 @@
         🔐 TP-Link Account
       </h2>
       <p class="section-description">
-        Enter your TP-Link/Tapo account credentials to discover devices
+        Choose how to provide your Tapo credentials
       </p>
 
       <div id="credentials-error" class="alert alert-error hidden"></div>
 
+      <!-- Credential Type Selector -->
       <div class="form-group">
-        <label for="email">Email Address</label>
-        <input 
-          type="email" 
-          id="email" 
-          placeholder="your.email@example.com"
-          autocomplete="email"
-        />
+        <label>Credential Method</label>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label class="credential-method-option">
+            <input 
+              type="radio" 
+              name="credentialType" 
+              value="traditional" 
+              id="credential-type-traditional"
+              checked
+              onchange="toggleCredentialFields()"
+            />
+            <div class="credential-method-content">
+              <strong>Traditional (TP-Link Account)</strong>
+              <div class="description">
+                Credentials stored encrypted on disk (recommended for most users)
+              </div>
+            </div>
+          </label>
+          <label class="credential-method-option">
+            <input 
+              type="radio" 
+              name="credentialType" 
+              value="secret-request" 
+              id="credential-type-secret"
+              onchange="toggleCredentialFields()"
+            />
+            <div class="credential-method-content">
+              <strong>Secret Request (iPhone Push)</strong>
+              <div class="description">
+                Credentials delivered via push notification, never stored on disk
+              </div>
+            </div>
+          </label>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input 
-          type="password" 
-          id="password" 
-          placeholder="Enter your password"
-          autocomplete="current-password"
-        />
+      <!-- Traditional Credentials Fields -->
+      <div id="traditional-fields">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input 
+            type="email" 
+            id="email" 
+            placeholder="your.email@example.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input 
+            type="password" 
+            id="password" 
+            placeholder="Enter your password"
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button 
+          id="btn-discover" 
+          class="btn btn-primary btn-block"
+          onclick="discoverDevices()"
+        >
+          Discover Devices
+        </button>
       </div>
 
-      <button 
-        id="btn-discover" 
-        class="btn btn-primary btn-block"
-        onclick="discoverDevices()"
-      >
-        Discover Devices
-      </button>
+      <!-- Secret Request Fields -->
+      <div id="secret-request-fields" class="hidden">
+        <div class="form-group">
+          <label for="secret-name">Secret Name</label>
+          <input 
+            type="text" 
+            id="secret-name" 
+            placeholder="tapo-admin"
+            value="tapo-admin"
+          />
+          <p style="font-size: 12px; color: #888; margin-top: 4px;">
+            Name of the secret stored in your iOS Keychain (via Scriptable)
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="secret-server-url">Secret Request Server URL</label>
+          <input 
+            type="text" 
+            id="secret-server-url" 
+            placeholder="http://localhost:8420"
+            value="http://localhost:8420"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="secret-timeout">Request Timeout (hours)</label>
+          <input 
+            type="number" 
+            id="secret-timeout" 
+            min="1"
+            max="48"
+            value="12"
+            step="1"
+          />
+          <p style="font-size: 12px; color: #888; margin-top: 4px;">
+            How long to wait for approval on iPhone (1-48 hours)
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="secret-api-key">API Key (Optional)</label>
+          <input 
+            type="text" 
+            id="secret-api-key" 
+            placeholder="your-api-key-here"
+          />
+          <p style="font-size: 12px; color: #888; margin-top: 4px;">
+            API key for Secret Request server authentication. Can also be set via SECRET_API_KEY environment variable.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <button 
+            id="btn-test-secret-server"
+            class="btn btn-secondary btn-block"
+            onclick="testSecretRequestServer()"
+            style="margin-bottom: 16px;"
+          >
+            🔍 Test Secret Request Server
+          </button>
+          <div id="secret-test-result" class="hidden" style="margin-bottom: 16px;"></div>
+        </div>
+
+        <p style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; color: #856404;">
+          ⚠️ <strong>Note:</strong> When you click Continue, this UI will create a secret request and wait for you to approve it on your iPhone (via Scriptable notification). 
+          Once approved, your credentials will be retrieved and device discovery will begin automatically.
+        </p>
+
+        <button 
+          class="btn btn-primary btn-block"
+          id="btn-request-credentials"
+          onclick="continueWithSecretRequest()"
+        >
+          Request Credentials & Discover Devices
+        </button>
+      </div>
     </div>
 
     <!-- Step 2: Device Discovery (Initially Hidden) -->
@@ -907,10 +1068,6 @@
     }
 
     async function testDeviceConnection(mac, ip) {
-      // Use stored credentials or fall back to input fields (may be empty if using server-stored creds)
-      let email = storedCredentials.email || document.getElementById('email').value.trim();
-      let password = storedCredentials.password || document.getElementById('password').value;
-      
       const statusEl = document.getElementById(`status-${mac}`);
       const btnEl = document.getElementById(`btn-test-${mac}`);
       
@@ -921,12 +1078,9 @@
       btnEl.textContent = '...';
       
       try {
-        // Try to test - server will use stored credentials if email/password not provided
+        // Server will use stored/decrypted credentials from config
+        // Never send credentials from client for security
         const payload = { ip };
-        if (email && password) {
-          payload.email = email;
-          payload.password = password;
-        }
         
         const result = await homebridge.request('/test-connection', payload);
         
@@ -955,18 +1109,14 @@
           alert(`Connection test failed:\n\n${result.message}`);
         }
       } catch (error) {
-        statusEl.className = 'device-status error';
-        statusEl.innerHTML = '! ERROR';
+        statusEl.className = 'device-status auth_failed';
+        statusEl.innerHTML = '! AUTH FAIL';
         
-        // Check if error is about missing credentials
-        if (error.message && error.message.includes('credentials')) {
-          // Show credentials section to get credentials
-          document.getElementById('step-credentials').classList.remove('hidden');
-          document.getElementById('step-credentials').classList.remove('credentials-collapsed');
-          alert('Please enter your TP-Link credentials to test devices.');
-          document.getElementById('email').focus();
-        } else {
-          alert(`Test failed: ${error.message}`);
+        // Just update the device's connection info, don't show popup
+        const device = discoveredDevices.find(d => d.mac === mac);
+        if (device) {
+          device.connectionStatus = 'auth_failed';
+          device.connectionMessage = error.message || 'Authentication failed - check credentials';
         }
       } finally {
         const btnElFinal = document.getElementById(`btn-test-${mac}`);
@@ -993,7 +1143,7 @@
     }
 
     async function saveConfig() {
-      let { email, password } = storedCredentials;
+      const credentialType = document.getElementById('credential-type-traditional').checked ? 'traditional' : 'secret-request';
       const pollingInterval = parseInt(document.getElementById('polling-interval').value) || 30;
 
       // Get selected devices with full metadata
@@ -1015,38 +1165,90 @@
         return;
       }
 
-      if (!email || !password) {
-        // Show credentials section to get credentials
-        document.getElementById('step-credentials').classList.remove('hidden');
-        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
-        alert('Please enter your TP-Link credentials first, then save again.');
-        document.getElementById('email').focus();
-        return;
-      }
-
       const btnSave = document.getElementById('btn-save');
       btnSave.disabled = true;
       btnSave.innerHTML = '<span class="loading-spinner"></span> Saving...';
 
       try {
-        // Request the server to encrypt credentials
-        const encryptResponse = await homebridge.request('/encrypt-credentials', { email, password });
-
-        const config = {
+        let config = {
           name: 'Tapo Platform',
-          email: encryptResponse.email,
-          password: encryptResponse.password,
-          isEncrypted: true,
+          credentialType: credentialType,
           devices: selectedDevices,
           pollingInterval: pollingInterval
         };
+
+        if (credentialType === 'traditional') {
+          // Clean up secret-request fields if switching modes
+          delete config.secretName;
+          delete config.secretServerUrl;
+          delete config.secretTimeout;
+          delete config.secretApiKey;
+          delete config.isApiKeyEncrypted;
+          
+          // Traditional mode: require and encrypt credentials
+          let { email, password } = storedCredentials;
+          
+          if (!email || !password) {
+            // Show credentials section to get credentials
+            document.getElementById('step-credentials').classList.remove('hidden');
+            document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+            alert('Please enter your TP-Link credentials first, then save again.');
+            document.getElementById('email').focus();
+            btnSave.innerHTML = 'Save Configuration';
+            btnSave.disabled = false;
+            return;
+          }
+          
+          // Request the server to encrypt credentials
+          const encryptResponse = await homebridge.request('/encrypt-credentials', { email, password });
+
+          config.email = encryptResponse.email;
+          config.password = encryptResponse.password;
+          config.isEncrypted = true;
+          
+        } else {
+          // Clean up traditional mode fields if switching modes
+          delete config.email;
+          delete config.password;
+          delete config.isEncrypted;
+          
+          // Secret Request mode: store secret configuration
+          const secretName = document.getElementById('secret-name').value.trim();
+          const secretServerUrl = document.getElementById('secret-server-url').value.trim();
+          const secretTimeoutHours = parseInt(document.getElementById('secret-timeout').value) || 12;
+          const secretApiKey = document.getElementById('secret-api-key').value.trim();
+          
+          if (!secretName) {
+            alert('Please enter a secret name for Secret Request mode');
+            btnSave.innerHTML = 'Save Configuration';
+            btnSave.disabled = false;
+            return;
+          }
+          
+          config.secretName = secretName;
+          config.secretServerUrl = secretServerUrl || 'http://localhost:8420';
+          config.secretTimeout = secretTimeoutHours * 3600; // Convert hours to seconds
+          
+          // Encrypt API key if provided
+          if (secretApiKey) {
+            const encryptResponse = await homebridge.request('/encrypt-credentials', { 
+              email: 'apikey', // Dummy value, not used
+              password: secretApiKey 
+            });
+            config.secretApiKey = encryptResponse.password; // Use password field for API key
+            config.isApiKeyEncrypted = true;
+          }
+        }
 
         // Save to homebridge
         await homebridge.updatePluginConfig([config]);
         await homebridge.savePluginConfig();
 
         // Show success and close
-        alert('✅ Configuration saved! Homebridge will restart to apply changes.');
+        const modeMessage = credentialType === 'traditional' 
+          ? 'Configuration saved! Homebridge will restart to apply changes.'
+          : 'Configuration saved! Homebridge will restart and request credentials from your iPhone.\n\nYou will receive a push notification - approve it to activate your devices.';
+        alert('✅ ' + modeMessage);
         homebridge.closeSettings();
 
       } catch (error) {
@@ -1156,12 +1358,12 @@
       btn.innerHTML = '<span class="loading-spinner"></span> Testing connection...';
 
       try {
-        // First, test the connection with detailed feedback
-        const testResult = await homebridge.request('/test-connection', { email, password, ip });
+        // Use check-device endpoint (initial setup, credentials required)
+        const result = await homebridge.request('/check-device', { email, password, ip, name });
 
-        if (testResult.success && testResult.device) {
+        if (result.success && result.device) {
           // Connection successful, add the device
-          const device = testResult.device;
+          const device = result.device;
           if (name) {
             device.name = name;
             device.nickname = name;
@@ -1228,12 +1430,55 @@
         if (config && config.length > 0) {
           const pluginConfig = config[0];
           
-          // If there are existing encrypted credentials, show a helpful message
-          if (pluginConfig.email && pluginConfig.isEncrypted) {
-            document.getElementById('email').placeholder = 'Enter to update credentials';
-            document.getElementById('password').placeholder = 'Enter to update credentials';
+          // Load credential type
+          const credentialType = pluginConfig.credentialType || 'traditional';
+          if (credentialType === 'secret-request') {
+            document.getElementById('credential-type-secret').checked = true;
+            document.getElementById('credential-type-traditional').checked = false;
+            
+            // Load secret request fields
+            if (pluginConfig.secretName) {
+              document.getElementById('secret-name').value = pluginConfig.secretName;
+            }
+            if (pluginConfig.secretServerUrl) {
+              document.getElementById('secret-server-url').value = pluginConfig.secretServerUrl;
+            }
+            if (pluginConfig.secretTimeout) {
+              document.getElementById('secret-timeout').value = Math.round(pluginConfig.secretTimeout / 3600); // Convert seconds to hours
+            }
+            if (pluginConfig.secretApiKey) {
+              // Don't show encrypted API key - just show placeholder
+              if (pluginConfig.isApiKeyEncrypted) {
+                document.getElementById('secret-api-key').placeholder = '••••••••••••••••';
+              } else {
+                // Legacy plaintext API key (shouldn't happen after save, but handle it)
+                document.getElementById('secret-api-key').value = pluginConfig.secretApiKey;
+              }
+            }
+          } else {
+            // Traditional mode
+            document.getElementById('credential-type-traditional').checked = true;
+            document.getElementById('credential-type-secret').checked = false;
+            
+            // Load email/password
+            if (pluginConfig.email) {
+              if (pluginConfig.isEncrypted) {
+                // Show placeholder for encrypted credentials
+                document.getElementById('email').placeholder = 'Enter to update credentials';
+                document.getElementById('password').placeholder = 'Enter to update credentials';
+              } else {
+                // Legacy plaintext credentials (shouldn't happen after save, but handle it)
+                document.getElementById('email').value = pluginConfig.email;
+                if (pluginConfig.password) {
+                  document.getElementById('password').value = pluginConfig.password;
+                }
+              }
+            }
           }
-
+          
+          // Toggle fields based on loaded credential type
+          toggleCredentialFields();
+          
           if (pluginConfig.pollingInterval) {
             document.getElementById('polling-interval').value = pluginConfig.pollingInterval;
           }
@@ -1266,10 +1511,6 @@
 
     // Verify all devices at once
     async function verifyAllDevices() {
-      // Use stored credentials or fall back to input fields (may be empty if using server-stored creds)
-      let email = storedCredentials.email || document.getElementById('email').value.trim();
-      let password = storedCredentials.password || document.getElementById('password').value;
-      
       if (discoveredDevices.length === 0) {
         alert('No devices to verify');
         return;
@@ -1288,12 +1529,8 @@
           mac: d.mac,
         }));
         
-        // Build payload - server will use stored credentials if email/password not provided
+        // Server will use stored/decrypted credentials from config
         const payload = { devices: devicesToVerify };
-        if (email && password) {
-          payload.email = email;
-          payload.password = password;
-        }
         
         const response = await homebridge.request('/verify-devices', payload);
         
@@ -1334,16 +1571,306 @@
           alert('Please enter your TP-Link credentials to verify devices.');
           document.getElementById('email').focus();
         } else {
-          alert('Failed to verify devices: ' + error.message);
+          alert('Failed to verify devices: ' + (error.message || 'Unknown error. Make sure configuration is saved.'));
         }
         
-        // Reset testing status
+        // Reset all devices to unknown status
         discoveredDevices.forEach(device => {
           if (device.connectionStatus === 'testing') {
             device.connectionStatus = null;
           }
         });
         renderDevices();
+      }
+    }
+
+    // Toggle credential fields based on selected type
+    function toggleCredentialFields() {
+      const isTraditional = document.getElementById('credential-type-traditional').checked;
+      document.getElementById('traditional-fields').classList.toggle('hidden', !isTraditional);
+      document.getElementById('secret-request-fields').classList.toggle('hidden', isTraditional);
+    }
+
+    // Continue with Secret Request mode (skip device discovery)
+    async function continueWithSecretRequest() {
+      const secretName = document.getElementById('secret-name').value.trim();
+      const serverUrl = document.getElementById('secret-server-url').value.trim();
+      const apiKey = document.getElementById('secret-api-key').value.trim();
+      const secretTimeoutHours = parseInt(document.getElementById('secret-timeout').value) || 12;
+      const secretTimeout = secretTimeoutHours * 3600; // Convert to seconds
+      
+      if (!secretName) {
+        alert('Please enter a secret name');
+        return;
+      }
+      
+      if (!serverUrl) {
+        alert('Please enter a server URL');
+        return;
+      }
+      
+      // Disable button and show loading state
+      const btn = document.getElementById('btn-request-credentials');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="loading-spinner"></span> Requesting credentials...';
+      
+      // Collapse credentials section to show waiting state
+      document.getElementById('step-credentials').classList.add('credentials-collapsed');
+      
+      // Show discovery section with waiting message
+      document.getElementById('step-discovery').classList.remove('hidden');
+      const discoveryLoading = document.getElementById('discovery-loading');
+      discoveryLoading.classList.remove('hidden');
+      
+      const timeoutDisplay = secretTimeoutHours >= 1 
+        ? `${secretTimeoutHours} hour${secretTimeoutHours !== 1 ? 's' : ''}`
+        : `${secretTimeout} seconds`;
+      
+      const progressText = document.getElementById('discovery-progress-text');
+      if (progressText) {
+        progressText.innerHTML = `
+          <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 16px; margin-bottom: 12px;">📱 Waiting for approval on iPhone...</div>
+            <div style="font-size: 13px; color: #666;">
+              Check your iPhone for a push notification from Scriptable.<br>
+              Approve the secret request to continue with device discovery.<br>
+              <br>
+              <strong>Timeout:</strong> ${timeoutDisplay}
+            </div>
+          </div>
+        `;
+      }
+      
+      try {
+        // Request credentials via Secret Request
+        const response = await homebridge.request('/request-credentials', {
+          serverUrl,
+          apiKey: apiKey || undefined,
+          secretName,
+          secretTimeout,
+        });
+        
+        if (!response.success || !response.email || !response.password) {
+          throw new Error('Invalid response from server');
+        }
+        
+        // Store credentials for discovery and later use
+        storedCredentials = { 
+          email: response.email, 
+          password: response.password 
+        };
+        
+        // Show logged-in badge
+        document.getElementById('logged-in-email').textContent = response.email;
+        document.getElementById('logged-in-badge').classList.remove('hidden');
+        
+        // Update loading message
+        if (progressText) {
+          progressText.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 16px; margin-bottom: 12px;">✅ Credentials received!</div>
+              <div style="font-size: 13px; color: #666;">
+                Now discovering devices on your network...<br>
+                Request ID: ${response.requestId}
+              </div>
+            </div>
+          `;
+        }
+        
+        // Now discover devices using the received credentials
+        const discoveryResponse = await homebridge.request('/discover', { 
+          email: response.email, 
+          password: response.password 
+        });
+        
+        discoveredDevices = discoveryResponse.devices || [];
+        
+        if (discoveredDevices.length === 0) {
+          discoveryLoading.classList.add('hidden');
+          document.getElementById('no-devices').classList.remove('hidden');
+        } else {
+          renderDevices();
+          discoveryLoading.classList.add('hidden');
+          document.getElementById('device-list').classList.remove('hidden');
+        }
+        
+        // Hide credentials section, show manual entry, settings, and save
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        document.getElementById('step-credentials').classList.add('hidden');
+        document.getElementById('step-manual').classList.remove('hidden');
+        document.getElementById('step-settings').classList.remove('hidden');
+        document.getElementById('save-section').classList.remove('hidden');
+        
+      } catch (error) {
+        console.error('Secret request error:', error);
+        
+        // Show error message
+        if (progressText) {
+          progressText.innerHTML = `
+            <div style="text-align: center; padding: 20px;">
+              <div style="font-size: 16px; margin-bottom: 12px; color: #d32f2f;">❌ Failed to get credentials</div>
+              <div style="font-size: 13px; color: #666;">
+                ${error.message || 'Unknown error'}<br>
+                <br>
+                Please try again or use traditional credentials mode.
+              </div>
+            </div>
+          `;
+        }
+        
+        // Un-collapse credentials section so user can try again
+        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+        discoveryLoading.classList.add('hidden');
+        
+        // Re-enable button
+        btn.disabled = false;
+        btn.innerHTML = 'Request Credentials & Discover Devices';
+      }
+    }
+
+    // Test Secret Request server connection
+    async function testSecretRequestServer() {
+      const serverUrl = document.getElementById('secret-server-url').value.trim();
+      const apiKey = document.getElementById('secret-api-key').value.trim();
+      const secretName = document.getElementById('secret-name').value.trim();
+      const secretTimeoutHours = parseInt(document.getElementById('secret-timeout').value) || 12;
+      const resultDiv = document.getElementById('secret-test-result');
+      const btn = document.getElementById('btn-test-secret-server');
+      
+      if (!serverUrl) {
+        alert('Please enter a server URL');
+        return;
+      }
+      
+      if (!secretName) {
+        alert('Please enter a secret name');
+        return;
+      }
+      
+      // Update button state
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Testing...';
+      resultDiv.className = 'hidden';
+      
+      // Show waiting message
+      const timeoutDisplay = secretTimeoutHours >= 1 
+        ? `${secretTimeoutHours} hour${secretTimeoutHours !== 1 ? 's' : ''}`
+        : `${secretTimeoutHours * 3600} seconds`;
+      
+      resultDiv.className = '';
+      resultDiv.innerHTML = '<div style="padding: 12px; border-radius: 4px; background: #fff3cd; border: 1px solid #ffeaa7;">' +
+        '<strong style="color: #856404;">⏳ Testing in progress...</strong>' +
+        '<div style="margin-top: 8px; font-size: 13px; color: #856404;">' +
+        `Creating secret request and waiting up to ${timeoutDisplay} for approval on iPhone...` +
+        '</div>' +
+        '</div>';
+      
+      try {
+        // Use backend to test server (avoids CORS, keeps API key server-side)
+        const result = await homebridge.request('/test-secret-server', {
+          serverUrl,
+          apiKey: apiKey || undefined,
+          secretName,
+          secretTimeout: secretTimeoutHours * 3600, // Convert hours to seconds
+        });
+        
+        if (result.success) {
+          // Show detailed test results
+          let html = '<div style="padding: 12px; border-radius: 4px; background: #d4edda; border: 1px solid #c3e6cb;">';
+          html += '<strong style="color: #155724;">✅ All Tests Passed</strong>';
+          
+          if (result.results) {
+            html += '<div style="margin-top: 12px; font-size: 13px; color: #155724;">';
+            
+            // Health check
+            if (result.results.health) {
+              html += `<div style="margin-bottom: 6px;">`;
+              html += result.results.health.success ? '✓' : '✗';
+              html += ` <strong>Health:</strong> ${result.results.health.message}`;
+              html += '</div>';
+            }
+            
+            // E2E check
+            if (result.results.e2e) {
+              html += `<div style="margin-bottom: 6px;">`;
+              html += result.results.e2e.success ? '✓' : '✗';
+              html += ` <strong>E2E:</strong> ${result.results.e2e.message}`;
+              if (result.results.e2e.requestId) {
+                html += `<br><small style="margin-left: 20px; color: #155724;">Request ID: ${result.results.e2e.requestId}</small>`;
+              }
+              if (result.results.e2e.credentialsReceived) {
+                html += `<br><small style="margin-left: 20px; color: #155724;">✓ Email and password received</small>`;
+              }
+              if (result.results.e2e.secretType) {
+                html += `<br><small style="margin-left: 20px; color: #155724;">Secret type: ${result.results.e2e.secretType}</small>`;
+              }
+              html += '</div>';
+            }
+            
+            html += '</div>';
+          }
+          
+          html += '</div>';
+          resultDiv.className = '';
+          resultDiv.innerHTML = html;
+        } else {
+          // Show error details
+          let html = '<div style="padding: 12px; border-radius: 4px; background: #f8d7da; border: 1px solid #f5c6cb;">';
+          html += '<strong style="color: #721c24;">❌ Tests Failed</strong>';
+          
+          if (result.results) {
+            html += '<div style="margin-top: 12px; font-size: 13px; color: #721c24;">';
+            
+            // Health check
+            if (result.results.health) {
+              html += `<div style="margin-bottom: 6px;">`;
+              html += result.results.health.success ? '✓' : '✗';
+              html += ` <strong>Health:</strong> ${result.results.health.message}`;
+              html += '</div>';
+            }
+            
+            // E2E check
+            if (result.results.e2e) {
+              html += `<div style="margin-bottom: 6px;">`;
+              html += result.results.e2e.success ? '✓' : '✗';
+              html += ` <strong>E2E:</strong> ${result.results.e2e.message}`;
+              if (result.results.e2e.requestId) {
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Request ID: ${result.results.e2e.requestId}</small>`;
+              }
+              if (result.results.e2e.outcome) {
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Outcome: ${result.results.e2e.outcome}</small>`;
+              }
+              if (result.results.e2e.errorDetails) {
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Details: ${result.results.e2e.errorDetails}</small>`;
+              }
+              if (result.results.e2e.errorCode) {
+                html += `<br><small style="margin-left: 20px; color: #721c24;">Error Code: ${result.results.e2e.errorCode}</small>`;
+              }
+              html += '</div>';
+            }
+            
+            html += '</div>';
+          } else if (result.error && result.message) {
+            html += `<div style="margin-top: 8px; font-size: 13px; color: #721c24;">${result.message}</div>`;
+          }
+          
+          html += '</div>';
+          resultDiv.className = '';
+          resultDiv.innerHTML = html;
+        }
+      } catch (error) {
+        resultDiv.className = 'alert alert-error';
+        resultDiv.innerHTML = `
+          ❌ <strong>Connection Failed</strong><br>
+          <small>Cannot reach server at ${serverUrl}<br>
+          • Check the URL is correct<br>
+          • Ensure the secret-request server is running<br>
+          • Verify network connectivity<br>
+          <br>Error: ${error.message}</small>
+        `;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🔍 Test Secret Request Server';
       }
     }
 

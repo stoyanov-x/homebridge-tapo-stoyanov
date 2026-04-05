@@ -10,6 +10,11 @@ yarn.lock
 dist/
 *.tsbuildinfo
 
+# Compiled artifacts (should never be in src/)
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts.map
+
 # Python virtual environment
 venv/
 *.pyc

@@ -5,6 +5,7 @@
 
 const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
 const { discoverDevices, checkDevice, testConnection, verifyDevices, encryptCredential, decryptCredential, isEncryptionAvailable } = require('../dist/utils');
+const { SecretRequestClient } = require('../dist/external/secret-client');
 
 class PluginUiServer extends HomebridgePluginUiServer {
   constructor() {
@@ -103,18 +104,6 @@ class PluginUiServer extends HomebridgePluginUiServer {
     this.onRequest('/test-connection', async (payload) => {
       try {
         const { ip } = payload || {};
-        let { email, password } = payload || {};
-
-        // If credentials not provided, try to use stored credentials
-        if (!email || !password) {
-          const storedCreds = await this.getStoredCredentials();
-          if (storedCreds) {
-            email = storedCreds.email;
-            password = storedCreds.password;
-          } else {
-            throw new RequestError('No credentials provided and no stored credentials available', { status: 400 });
-          }
-        }
 
         if (!ip) {
           throw new RequestError('IP address is required', { status: 400 });
@@ -126,7 +115,14 @@ class PluginUiServer extends HomebridgePluginUiServer {
           throw new RequestError('Invalid IP address format', { status: 400 });
         }
 
-        const credentials = { email, password };
+        // ALWAYS use server-side stored credentials for security
+        // Never accept credentials from client to prevent plaintext transmission
+        const storedCreds = await this.getStoredCredentials();
+        if (!storedCreds) {
+          throw new RequestError('No saved configuration found. Please save your configuration first.', { status: 400 });
+        }
+
+        const credentials = { email: storedCreds.email, password: storedCreds.password };
         const result = await testConnection(ip, credentials);
         return result;
       } catch (error) {
@@ -139,24 +135,18 @@ class PluginUiServer extends HomebridgePluginUiServer {
     this.onRequest('/verify-devices', async (payload) => {
       try {
         const { devices } = payload || {};
-        let { email, password } = payload || {};
-
-        // If credentials not provided, try to use stored credentials
-        if (!email || !password) {
-          const storedCreds = await this.getStoredCredentials();
-          if (storedCreds) {
-            email = storedCreds.email;
-            password = storedCreds.password;
-          } else {
-            throw new RequestError('No credentials provided and no stored credentials available', { status: 400 });
-          }
-        }
 
         if (!devices || !Array.isArray(devices) || devices.length === 0) {
           throw new RequestError('Devices array is required', { status: 400 });
         }
 
-        const credentials = { email, password };
+        // ALWAYS use server-side stored credentials for security
+        const storedCreds = await this.getStoredCredentials();
+        if (!storedCreds) {
+          throw new RequestError('No saved configuration found. Please save your configuration first.', { status: 400 });
+        }
+
+        const credentials = { email: storedCreds.email, password: storedCreds.password };
         const results = await verifyDevices(devices, credentials);
         return {
           success: true,
@@ -199,6 +189,218 @@ class PluginUiServer extends HomebridgePluginUiServer {
       }
     });
 
+    // Test Secret Request server connection
+    this.onRequest('/test-secret-server', async (payload) => {
+      try {
+        const { serverUrl, apiKey, secretName, secretTimeout } = payload || {};
+
+        if (!serverUrl) {
+          throw new RequestError('Server URL is required', { status: 400 });
+        }
+
+        if (!secretName) {
+          throw new RequestError('Secret name is required', { status: 400 });
+        }
+
+        try {
+          new URL(serverUrl);
+        } catch {
+          throw new RequestError('Invalid server URL format', { status: 400 });
+        }
+
+        // Use provided timeout from UI (in seconds), default to 30s if not specified
+        const testTimeout = secretTimeout && secretTimeout > 0 ? secretTimeout : 30;
+
+        const results = {
+          health: null,
+          e2e: null,
+        };
+
+        // Create SecretRequestClient instance with E2E enabled
+        const client = new SecretRequestClient({
+          serverUrl,
+          apiKey,
+          e2e: true, // Always test with E2E encryption
+        });
+
+        // Test 1: Health check (no auth required)
+        try {
+          const healthy = await client.healthCheck();
+          results.health = {
+            success: healthy,
+            message: healthy ? 'Server is reachable' : 'Server health check failed',
+          };
+        } catch (error) {
+          results.health = {
+            success: false,
+            message: error.message || 'Connection failed',
+          };
+        }
+
+        // Test 2: E2E secret request with UI form values - FULL E2E TEST
+        try {
+          // Create a test secret request
+          const requestId = await client.createRequest(secretName, testTimeout);
+          
+          if (!requestId) {
+            results.e2e = {
+              success: false,
+              message: 'Failed to create secret request',
+            };
+          } else {
+            // Now actually wait for user to approve/reject on iPhone!
+            const waitStart = Date.now();
+            try {
+              const secret = await client.waitForRequest(requestId, testTimeout);
+              const waitDuration = ((Date.now() - waitStart) / 1000).toFixed(1);
+              
+              // Success! Got credentials back
+              const hasEmail = typeof secret === 'object' && secret.email;
+              const hasPassword = typeof secret === 'object' && secret.password;
+              
+              results.e2e = {
+                success: true,
+                message: `E2E test complete - secret received and decrypted successfully (took ${waitDuration}s)`,
+                requestId: requestId,
+                credentialsReceived: hasEmail && hasPassword,
+                secretType: typeof secret === 'object' ? 'multi-part' : 'string',
+                duration: waitDuration,
+              };
+            } catch (waitError) {
+              const waitDuration = ((Date.now() - waitStart) / 1000).toFixed(1);
+              
+              // Handle approval/rejection outcomes
+              if (waitError.code === 'denied') {
+                results.e2e = {
+                  success: false,
+                  message: `Secret request was denied on iPhone (after ${waitDuration}s)`,
+                  requestId: requestId,
+                  outcome: 'denied',
+                  duration: waitDuration,
+                };
+              } else if (waitError.code === 'timeout') {
+                results.e2e = {
+                  success: false,
+                  message: `Request timed out after ${waitDuration}s - no response from iPhone (timeout was ${testTimeout}s)`,
+                  requestId: requestId,
+                  outcome: 'timeout',
+                  duration: waitDuration,
+                  errorDetails: waitError.message,
+                };
+              } else if (waitError.code === 'cancelled') {
+                results.e2e = {
+                  success: false,
+                  message: `Secret request was cancelled (after ${waitDuration}s)`,
+                  requestId: requestId,
+                  outcome: 'cancelled',
+                  duration: waitDuration,
+                };
+              } else {
+                results.e2e = {
+                  success: false,
+                  message: `E2E wait failed: ${waitError.message} (after ${waitDuration}s)`,
+                  requestId: requestId,
+                  outcome: 'error',
+                  duration: waitDuration,
+                  errorDetails: waitError.message,
+                  errorCode: waitError.code,
+                };
+              }
+            }
+          }
+        } catch (error) {
+          // Check if it's an auth error
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            results.e2e = {
+              success: false,
+              message: 'API key authentication failed - check your API key',
+            };
+          } else {
+            results.e2e = {
+              success: false,
+              message: `E2E test failed: ${error.message}`,
+            };
+          }
+        }
+
+        // Determine overall success
+        const allPassed = results.health?.success && results.e2e?.success;
+
+        return {
+          success: allPassed,
+          results: results,
+        };
+      } catch (error) {
+        console.error('Test secret server error:', error);
+        throw error;
+      }
+    });
+
+    // Request credentials via Secret Request and wait for approval
+    this.onRequest('/request-credentials', async (payload) => {
+      try {
+        const { serverUrl, apiKey, secretName, secretTimeout } = payload || {};
+
+        if (!serverUrl) {
+          throw new RequestError('Server URL is required', { status: 400 });
+        }
+
+        if (!secretName) {
+          throw new RequestError('Secret name is required', { status: 400 });
+        }
+
+        try {
+          new URL(serverUrl);
+        } catch {
+          throw new RequestError('Invalid server URL format', { status: 400 });
+        }
+
+        // Create SecretRequestClient instance with E2E enabled
+        const client = new SecretRequestClient({
+          serverUrl,
+          apiKey,
+          e2e: true, // Always use E2E encryption
+        });
+
+        // Create secret request
+        const requestId = await client.createRequest(secretName, secretTimeout);
+        
+        if (!requestId) {
+          throw new RequestError('Failed to create secret request', { status: 500 });
+        }
+
+        // Wait for user to approve on iPhone
+        const secret = await client.waitForRequest(requestId, secretTimeout);
+        
+        // Validate that we got email and password
+        if (typeof secret !== 'object' || !secret.email || !secret.password) {
+          throw new RequestError('Invalid secret format - expected email and password fields', { status: 400 });
+        }
+
+        return {
+          success: true,
+          requestId: requestId,
+          email: secret.email,
+          password: secret.password,
+        };
+      } catch (error) {
+        console.error('Request credentials error:', error);
+        
+        // Map SecretRequestError codes to user-friendly messages
+        if (error.code === 'denied') {
+          throw new RequestError('Secret request was denied on iPhone', { status: 403 });
+        } else if (error.code === 'timeout') {
+          throw new RequestError('Request timed out - no response from iPhone', { status: 408 });
+        } else if (error.code === 'cancelled') {
+          throw new RequestError('Secret request was cancelled', { status: 409 });
+        } else if (error.response?.status === 401 || error.response?.status === 403) {
+          throw new RequestError('API key authentication failed', { status: 401 });
+        } else {
+          throw new RequestError(error.message || 'Failed to request credentials', { status: 500 });
+        }
+      }
+    });
+
     // Ready
     this.ready();
   }
@@ -209,31 +411,53 @@ class PluginUiServer extends HomebridgePluginUiServer {
    */
   async getStoredCredentials() {
     try {
-      const pluginConfig = await this.getPluginConfig();
-      if (!pluginConfig || pluginConfig.length === 0) {
+      // Read config.json from disk (server-side doesn't have getPluginConfig method)
+      const fs = require('fs');
+      const configPath = this.homebridgeConfigPath;
+      
+      if (!configPath) {
+        console.log('[Tapo UI] getStoredCredentials: No config path available');
         return null;
       }
       
-      const config = pluginConfig[0];
-      if (!config.email || !config.password) {
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      const pluginConfig = configData.platforms?.find(p => p.platform === 'TapoStoyanov');
+      
+      if (!pluginConfig) {
+        console.log('[Tapo UI] getStoredCredentials: No TapoStoyanov config found');
+        return null;
+      }
+      
+      console.log('[Tapo UI] getStoredCredentials: credentialType =', pluginConfig.credentialType, ', has email:', !!pluginConfig.email, ', has password:', !!pluginConfig.password, ', isEncrypted:', !!pluginConfig.isEncrypted);
+      
+      // Check credential type - only traditional mode has email/password
+      if (pluginConfig.credentialType === 'secret-request') {
+        console.log('[Tapo UI] getStoredCredentials: Using Secret Request mode - no stored credentials');
+        return null;
+      }
+      
+      if (!pluginConfig.email || !pluginConfig.password) {
+        console.log('[Tapo UI] getStoredCredentials: Missing email or password');
         return null;
       }
       
       // If credentials are encrypted, decrypt them
-      if (config.isEncrypted) {
-        const email = decryptCredential(config.email, this.homebridgeStoragePath);
-        const password = decryptCredential(config.password, this.homebridgeStoragePath);
+      if (pluginConfig.isEncrypted) {
+        const email = decryptCredential(pluginConfig.email, this.homebridgeStoragePath);
+        const password = decryptCredential(pluginConfig.password, this.homebridgeStoragePath);
         
         if (!email || !password) {
           console.warn('[Tapo] Failed to decrypt stored credentials');
           return null;
         }
         
+        console.log('[Tapo UI] getStoredCredentials: Successfully decrypted credentials');
         return { email, password };
       }
       
       // Return plaintext credentials
-      return { email: config.email, password: config.password };
+      console.log('[Tapo UI] getStoredCredentials: Returning plaintext credentials');
+      return { email: pluginConfig.email, password: pluginConfig.password };
     } catch (error) {
       console.warn('[Tapo] Error getting stored credentials:', error.message);
       return null;
