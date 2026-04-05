@@ -188,6 +188,105 @@ class PluginUiServer extends HomebridgePluginUiServer {
       }
     });
 
+    // Test Secret Request server connection
+    this.onRequest('/test-secret-server', async (payload) => {
+      try {
+        const { serverUrl, apiKey } = payload || {};
+
+        if (!serverUrl) {
+          throw new RequestError('Server URL is required', { status: 400 });
+        }
+
+        // Validate URL format
+        let url;
+        try {
+          url = new URL(serverUrl);
+        } catch {
+          throw new RequestError('Invalid server URL format', { status: 400 });
+        }
+
+        // Make request to /health endpoint from server-side
+        const https = require('https');
+        const http = require('http');
+        const client = url.protocol === 'https:' ? https : http;
+
+        const options = {
+          hostname: url.hostname,
+          port: url.port || (url.protocol === 'https:' ? 443 : 80),
+          path: '/health',
+          method: 'GET',
+          headers: {},
+          timeout: 5000,
+        };
+
+        // Add API key if provided
+        if (apiKey) {
+          options.headers['X-API-Key'] = apiKey;
+        }
+
+        return new Promise((resolve, reject) => {
+          const req = client.request(options, (res) => {
+            let data = '';
+
+            res.on('data', (chunk) => {
+              data += chunk;
+            });
+
+            res.on('end', () => {
+              if (res.statusCode === 200) {
+                try {
+                  const json = JSON.parse(data);
+                  resolve({
+                    success: true,
+                    version: json.version,
+                  });
+                } catch {
+                  resolve({
+                    success: true,
+                    message: 'Server responded but returned invalid JSON',
+                  });
+                }
+              } else if (res.statusCode === 401 || res.statusCode === 403) {
+                resolve({
+                  success: false,
+                  error: 'Authentication Failed',
+                  message: 'Invalid API key. Check your API key or remove it if not required by the server.',
+                });
+              } else {
+                resolve({
+                  success: false,
+                  error: `Server Error (HTTP ${res.statusCode})`,
+                  message: res.statusMessage || 'Unknown server error',
+                });
+              }
+            });
+          });
+
+          req.on('error', (error) => {
+            resolve({
+              success: false,
+              error: 'Connection Failed',
+              message: error.message,
+            });
+          });
+
+          req.on('timeout', () => {
+            req.destroy();
+            resolve({
+              success: false,
+              error: 'Connection Timeout',
+              message: 'Server did not respond within 5 seconds',
+            });
+          });
+
+          req.end();
+        });
+      } catch (error) {
+        console.error('Test secret server error:', error);
+        throw error;
+      }
+    });
+
     // Ready
     this.ready();
   }
@@ -199,24 +298,17 @@ class PluginUiServer extends HomebridgePluginUiServer {
   async getStoredCredentials() {
     try {
       const pluginConfig = await this.getPluginConfig();
-      console.log('[Tapo] getStoredCredentials - config array length:', pluginConfig?.length);
-      
       if (!pluginConfig || pluginConfig.length === 0) {
-        console.log('[Tapo] No plugin config found');
         return null;
       }
       
       const config = pluginConfig[0];
-      console.log('[Tapo] Config has email:', !!config.email, 'password:', !!config.password, 'isEncrypted:', config.isEncrypted);
-      
       if (!config.email || !config.password) {
-        console.log('[Tapo] Missing email or password in config');
         return null;
       }
       
       // If credentials are encrypted, decrypt them
       if (config.isEncrypted) {
-        console.log('[Tapo] Decrypting credentials...');
         const email = decryptCredential(config.email, this.homebridgeStoragePath);
         const password = decryptCredential(config.password, this.homebridgeStoragePath);
         
@@ -225,12 +317,10 @@ class PluginUiServer extends HomebridgePluginUiServer {
           return null;
         }
         
-        console.log('[Tapo] Successfully decrypted credentials');
         return { email, password };
       }
       
       // Return plaintext credentials
-      console.log('[Tapo] Returning plaintext credentials');
       return { email: config.email, password: config.password };
     } catch (error) {
       console.warn('[Tapo] Error getting stored credentials:', error.message);

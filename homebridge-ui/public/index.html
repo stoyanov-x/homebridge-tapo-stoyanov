@@ -652,7 +652,7 @@
           <div id="secret-test-result" class="hidden" style="margin-bottom: 16px;"></div>
         </div>
 
-        <p style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 13px; margin-bottom: 16px;">
+        <p style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 13px; margin-bottom: 16px; color: #856404;">
           ⚠️ <strong>Note:</strong> Secret Request requires the secret-request server to be running and credentials stored in your iPhone's Scriptable Keychain. 
           Devices will appear in HomeKit immediately but show "No Response" until you approve the request on your iPhone.
         </p>
@@ -1629,41 +1629,32 @@
       resultDiv.className = 'hidden';
       
       try {
-        // Test the health endpoint
-        const response = await fetch(serverUrl + '/health', {
-          method: 'GET',
-          headers: {
-            ...(apiKey && { 'X-API-Key': apiKey }),
-          },
+        // Use backend to test server (avoids CORS, keeps API key server-side)
+        const result = await homebridge.request('/test-secret-server', {
+          serverUrl,
+          apiKey: apiKey || undefined,
         });
         
-        if (response.ok) {
-          const data = await response.json();
+        if (result.success) {
           resultDiv.className = 'alert alert-success';
           resultDiv.innerHTML = `
             ✅ <strong>Success!</strong> Secret Request server is reachable.
-            ${data.version ? `<br><small>Server version: ${data.version}</small>` : ''}
+            ${result.version ? `<br><small>Server version: ${result.version}</small>` : ''}
           `;
-        } else if (response.status === 401 || response.status === 403) {
-          resultDiv.className = 'alert alert-error';
-          resultDiv.innerHTML = '❌ <strong>Authentication Failed</strong><br><small>Invalid API key. Check your API key or remove it if not required by the server.</small>';
         } else {
           resultDiv.className = 'alert alert-error';
-          resultDiv.innerHTML = `❌ <strong>Server Error</strong><br><small>HTTP ${response.status}: ${response.statusText}</small>`;
+          resultDiv.innerHTML = `❌ <strong>${result.error || 'Connection Failed'}</strong><br><small>${result.message || 'Unknown error'}</small>`;
         }
       } catch (error) {
         resultDiv.className = 'alert alert-error';
-        if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed')) {
-          resultDiv.innerHTML = `
-            ❌ <strong>Connection Failed</strong><br>
-            <small>Cannot reach server at ${serverUrl}<br>
-            • Check the URL is correct<br>
-            • Ensure the secret-request server is running<br>
-            • Verify network connectivity</small>
-          `;
-        } else {
-          resultDiv.innerHTML = `❌ <strong>Error:</strong> ${error.message}`;
-        }
+        resultDiv.innerHTML = `
+          ❌ <strong>Connection Failed</strong><br>
+          <small>Cannot reach server at ${serverUrl}<br>
+          • Check the URL is correct<br>
+          • Ensure the secret-request server is running<br>
+          • Verify network connectivity<br>
+          <br>Error: ${error.message}</small>
+        `;
       } finally {
         btn.disabled = false;
         btn.innerHTML = '🔍 Test Secret Request Server';
