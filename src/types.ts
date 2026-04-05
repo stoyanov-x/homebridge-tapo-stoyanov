@@ -10,6 +10,12 @@ export interface TapoPlatformConfig {
   isEncrypted?: boolean;
   devices: TapoDeviceConfig[];
   pollingInterval?: number;
+  
+  // Secret Request configuration (optional)
+  credentialType?: 'traditional' | 'secret-request';
+  secretName?: string;
+  secretServerUrl?: string;
+  secretTimeout?: number; // seconds (3600-172800, default: 43200 = 12h)
 }
 
 export interface TapoDeviceConfig {
@@ -67,4 +73,26 @@ export interface DiscoveredDevice {
   device_on?: boolean;
   hw_ver?: string;
   fw_ver?: string;
+}
+
+/**
+ * State of Secret Request background service
+ */
+export type SecretRequestState = 
+  | 'idle'           // Not started or disabled
+  | 'requesting'     // Waiting for user approval
+  | 'delivered'      // Secret received successfully
+  | 'denied'         // User denied the request
+  | 'timeout'        // Request timed out
+  | 'error';         // Error occurred
+
+/**
+ * Secret Request status information
+ */
+export interface SecretRequestStatus {
+  state: SecretRequestState;
+  requestStartTime?: Date;
+  timeoutSeconds?: number;
+  errorMessage?: string;
+  requestId?: string;
 }

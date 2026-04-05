@@ -472,38 +472,134 @@
         🔐 TP-Link Account
       </h2>
       <p class="section-description">
-        Enter your TP-Link/Tapo account credentials to discover devices
+        Choose how to provide your Tapo credentials
       </p>
 
       <div id="credentials-error" class="alert alert-error hidden"></div>
 
+      <!-- Credential Type Selector -->
       <div class="form-group">
-        <label for="email">Email Address</label>
-        <input 
-          type="email" 
-          id="email" 
-          placeholder="your.email@example.com"
-          autocomplete="email"
-        />
+        <label>Credential Method</label>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input 
+              type="radio" 
+              name="credentialType" 
+              value="traditional" 
+              id="credential-type-traditional"
+              checked
+              onchange="toggleCredentialFields()"
+              style="margin-right: 8px;"
+            />
+            <div>
+              <strong>Traditional (TP-Link Account)</strong>
+              <div style="font-size: 12px; color: #888; margin-top: 2px;">
+                Credentials stored encrypted on disk (recommended for most users)
+              </div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: center; cursor: pointer;">
+            <input 
+              type="radio" 
+              name="credentialType" 
+              value="secret-request" 
+              id="credential-type-secret"
+              onchange="toggleCredentialFields()"
+              style="margin-right: 8px;"
+            />
+            <div>
+              <strong>Secret Request (iPhone Push)</strong>
+              <div style="font-size: 12px; color: #888; margin-top: 2px;">
+                Credentials delivered via push notification, never stored on disk
+              </div>
+            </div>
+          </label>
+        </div>
       </div>
 
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input 
-          type="password" 
-          id="password" 
-          placeholder="Enter your password"
-          autocomplete="current-password"
-        />
+      <!-- Traditional Credentials Fields -->
+      <div id="traditional-fields">
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <input 
+            type="email" 
+            id="email" 
+            placeholder="your.email@example.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input 
+            type="password" 
+            id="password" 
+            placeholder="Enter your password"
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button 
+          id="btn-discover" 
+          class="btn btn-primary btn-block"
+          onclick="discoverDevices()"
+        >
+          Discover Devices
+        </button>
       </div>
 
-      <button 
-        id="btn-discover" 
-        class="btn btn-primary btn-block"
-        onclick="discoverDevices()"
-      >
-        Discover Devices
-      </button>
+      <!-- Secret Request Fields -->
+      <div id="secret-request-fields" class="hidden">
+        <div class="form-group">
+          <label for="secret-name">Secret Name</label>
+          <input 
+            type="text" 
+            id="secret-name" 
+            placeholder="tapo-credentials"
+            value="tapo-credentials"
+          />
+          <p style="font-size: 12px; color: #888; margin-top: 4px;">
+            Name of the secret stored in your iOS Keychain (via Scriptable)
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label for="secret-server-url">Secret Request Server URL</label>
+          <input 
+            type="text" 
+            id="secret-server-url" 
+            placeholder="http://localhost:8420"
+            value="http://localhost:8420"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="secret-timeout">Request Timeout (hours)</label>
+          <input 
+            type="number" 
+            id="secret-timeout" 
+            min="1"
+            max="48"
+            value="12"
+            step="1"
+          />
+          <p style="font-size: 12px; color: #888; margin-top: 4px;">
+            How long to wait for approval on iPhone (1-48 hours)
+          </p>
+        </div>
+
+        <p style="background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; font-size: 13px; margin-bottom: 16px;">
+          ⚠️ <strong>Note:</strong> Secret Request requires the secret-request server to be running and credentials stored in your iPhone's Scriptable Keychain. 
+          Devices will appear in HomeKit immediately but show "No Response" until you approve the request on your iPhone.
+        </p>
+
+        <button 
+          class="btn btn-primary btn-block"
+          onclick="continueWithSecretRequest()"
+        >
+          Continue (Skip Discovery)
+        </button>
+      </div>
     </div>
 
     <!-- Step 2: Device Discovery (Initially Hidden) -->
@@ -993,7 +1089,7 @@
     }
 
     async function saveConfig() {
-      let { email, password } = storedCredentials;
+      const credentialType = document.getElementById('credential-type-traditional').checked ? 'traditional' : 'secret-request';
       const pollingInterval = parseInt(document.getElementById('polling-interval').value) || 30;
 
       // Get selected devices with full metadata
@@ -1015,38 +1111,67 @@
         return;
       }
 
-      if (!email || !password) {
-        // Show credentials section to get credentials
-        document.getElementById('step-credentials').classList.remove('hidden');
-        document.getElementById('step-credentials').classList.remove('credentials-collapsed');
-        alert('Please enter your TP-Link credentials first, then save again.');
-        document.getElementById('email').focus();
-        return;
-      }
-
       const btnSave = document.getElementById('btn-save');
       btnSave.disabled = true;
       btnSave.innerHTML = '<span class="loading-spinner"></span> Saving...';
 
       try {
-        // Request the server to encrypt credentials
-        const encryptResponse = await homebridge.request('/encrypt-credentials', { email, password });
-
-        const config = {
+        let config = {
           name: 'Tapo Platform',
-          email: encryptResponse.email,
-          password: encryptResponse.password,
-          isEncrypted: true,
+          credentialType: credentialType,
           devices: selectedDevices,
           pollingInterval: pollingInterval
         };
+
+        if (credentialType === 'traditional') {
+          // Traditional mode: require and encrypt credentials
+          let { email, password } = storedCredentials;
+          
+          if (!email || !password) {
+            // Show credentials section to get credentials
+            document.getElementById('step-credentials').classList.remove('hidden');
+            document.getElementById('step-credentials').classList.remove('credentials-collapsed');
+            alert('Please enter your TP-Link credentials first, then save again.');
+            document.getElementById('email').focus();
+            btnSave.innerHTML = 'Save Configuration';
+            btnSave.disabled = false;
+            return;
+          }
+          
+          // Request the server to encrypt credentials
+          const encryptResponse = await homebridge.request('/encrypt-credentials', { email, password });
+
+          config.email = encryptResponse.email;
+          config.password = encryptResponse.password;
+          config.isEncrypted = true;
+          
+        } else {
+          // Secret Request mode: store secret configuration
+          const secretName = document.getElementById('secret-name').value.trim();
+          const secretServerUrl = document.getElementById('secret-server-url').value.trim();
+          const secretTimeoutHours = parseInt(document.getElementById('secret-timeout').value) || 12;
+          
+          if (!secretName) {
+            alert('Please enter a secret name for Secret Request mode');
+            btnSave.innerHTML = 'Save Configuration';
+            btnSave.disabled = false;
+            return;
+          }
+          
+          config.secretName = secretName;
+          config.secretServerUrl = secretServerUrl || 'http://localhost:8420';
+          config.secretTimeout = secretTimeoutHours * 3600; // Convert hours to seconds
+        }
 
         // Save to homebridge
         await homebridge.updatePluginConfig([config]);
         await homebridge.savePluginConfig();
 
         // Show success and close
-        alert('✅ Configuration saved! Homebridge will restart to apply changes.');
+        const modeMessage = credentialType === 'traditional' 
+          ? 'Configuration saved! Homebridge will restart to apply changes.'
+          : 'Configuration saved! Homebridge will restart and request credentials from your iPhone.\n\nYou will receive a push notification - approve it to activate your devices.';
+        alert('✅ ' + modeMessage);
         homebridge.closeSettings();
 
       } catch (error) {
@@ -1228,12 +1353,33 @@
         if (config && config.length > 0) {
           const pluginConfig = config[0];
           
-          // If there are existing encrypted credentials, show a helpful message
-          if (pluginConfig.email && pluginConfig.isEncrypted) {
-            document.getElementById('email').placeholder = 'Enter to update credentials';
-            document.getElementById('password').placeholder = 'Enter to update credentials';
+          // Load credential type
+          const credentialType = pluginConfig.credentialType || 'traditional';
+          if (credentialType === 'secret-request') {
+            document.getElementById('credential-type-secret').checked = true;
+            document.getElementById('credential-type-traditional').checked = false;
+            
+            // Load secret request fields
+            if (pluginConfig.secretName) {
+              document.getElementById('secret-name').value = pluginConfig.secretName;
+            }
+            if (pluginConfig.secretServerUrl) {
+              document.getElementById('secret-server-url').value = pluginConfig.secretServerUrl;
+            }
+            if (pluginConfig.secretTimeout) {
+              document.getElementById('secret-timeout').value = Math.round(pluginConfig.secretTimeout / 3600); // Convert seconds to hours
+            }
+          } else {
+            // Traditional mode - show placeholders for encrypted credentials
+            if (pluginConfig.email && pluginConfig.isEncrypted) {
+              document.getElementById('email').placeholder = 'Enter to update credentials';
+              document.getElementById('password').placeholder = 'Enter to update credentials';
+            }
           }
-
+          
+          // Toggle fields based on loaded credential type
+          toggleCredentialFields();
+          
           if (pluginConfig.pollingInterval) {
             document.getElementById('polling-interval').value = pluginConfig.pollingInterval;
           }
@@ -1345,6 +1491,34 @@
         });
         renderDevices();
       }
+    }
+
+    // Toggle credential fields based on selected type
+    function toggleCredentialFields() {
+      const isTraditional = document.getElementById('credential-type-traditional').checked;
+      document.getElementById('traditional-fields').classList.toggle('hidden', !isTraditional);
+      document.getElementById('secret-request-fields').classList.toggle('hidden', isTraditional);
+    }
+
+    // Continue with Secret Request mode (skip device discovery)
+    function continueWithSecretRequest() {
+      const secretName = document.getElementById('secret-name').value.trim();
+      
+      if (!secretName) {
+        alert('Please enter a secret name');
+        return;
+      }
+      
+      // Hide credentials section
+      document.getElementById('step-credentials').classList.add('hidden');
+      
+      // Show manual device addition (since we can't discover without credentials)
+      document.getElementById('step-manual').classList.remove('hidden');
+      document.getElementById('step-settings').classList.remove('hidden');
+      document.getElementById('save-section').classList.remove('hidden');
+      
+      // Show info message
+      alert('Secret Request configured. Add devices manually by IP address below.\n\nDevices will appear in HomeKit immediately but show "No Response" until you approve the secret request on your iPhone after Homebridge restarts.');
     }
 
     // Initialize

@@ -2,7 +2,7 @@
   "pluginAlias": "TapoStoyanov",
   "pluginType": "platform",
   "singular": true,
-  "headerDisplay": "Configure your Tapo smart devices with an easy-to-use interface. This plugin supports automatic device discovery and encrypted credential storage.",
+  "headerDisplay": "Configure your Tapo smart devices with an easy-to-use interface. This plugin supports automatic device discovery and encrypted credential storage, plus optional Secret Request for credential-free operation.",
   "footerDisplay": "For support and documentation, visit the [GitHub repository](https://github.com/stoyanov-x/homebridge-tapo-stoyanov).",
   "customUi": true,
   "schema": {
@@ -14,23 +14,52 @@
         "required": true,
         "default": "Tapo Platform"
       },
+      "credentialType": {
+        "title": "Credential Type",
+        "type": "string",
+        "default": "traditional",
+        "oneOf": [
+          { "title": "Traditional (TP-Link Account)", "enum": ["traditional"] },
+          { "title": "Secret Request (iPhone Push)", "enum": ["secret-request"] }
+        ],
+        "description": "How to provide Tapo credentials: Traditional stores encrypted credentials on disk, Secret Request delivers them via iPhone push notification"
+      },
       "email": {
         "title": "TP-Link Account Email",
         "type": "string",
-        "required": true,
-        "description": "Your TP-Link/Tapo account email address (encrypted)"
+        "description": "Your TP-Link/Tapo account email address (encrypted) - Required for Traditional mode only"
       },
       "password": {
         "title": "TP-Link Account Password",  
         "type": "string",
-        "required": true,
-        "description": "Your TP-Link/Tapo account password (encrypted)"
+        "description": "Your TP-Link/Tapo account password (encrypted) - Required for Traditional mode only"
       },
       "isEncrypted": {
         "title": "Credentials Encrypted",
         "type": "boolean",
         "default": false,
-        "description": "Whether credentials are encrypted"
+        "description": "Whether credentials are encrypted (managed automatically by UI)"
+      },
+      "secretName": {
+        "title": "Secret Name",
+        "type": "string",
+        "description": "Name of the secret stored in iOS Keychain (e.g., 'tapo-credentials') - Required for Secret Request mode",
+        "placeholder": "tapo-credentials"
+      },
+      "secretServerUrl": {
+        "title": "Secret Request Server URL",
+        "type": "string",
+        "description": "URL of the secret-request server - Required for Secret Request mode",
+        "default": "http://localhost:8420",
+        "placeholder": "http://localhost:8420"
+      },
+      "secretTimeout": {
+        "title": "Secret Request Timeout (seconds)",
+        "type": "integer",
+        "description": "How long to wait for secret approval on iPhone (1-48 hours)",
+        "default": 43200,
+        "minimum": 3600,
+        "maximum": 172800
       },
       "devices": {
         "title": "Devices",

@@ -40,7 +40,10 @@
     "config.schema.json"
   ],
   "dependencies": {
-    "@homebridge/plugin-ui-utils": "^1.0.3"
+    "@homebridge/plugin-ui-utils": "^1.0.3",
+    "axios": "^1.6.0",
+    "tweetnacl": "^1.0.3",
+    "tweetnacl-sealedbox-js": "^1.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

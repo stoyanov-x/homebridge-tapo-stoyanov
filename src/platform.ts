@@ -17,6 +17,7 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { TapoLightAccessory } from './lightAccessory';
 import { TapoPlatformConfig, TapoDeviceConfig, TapoCredentials } from './types';
 import { getDecryptedCredentials, normalizeDeviceType } from './utils';
+import { SecretRequestService } from './secretRequestService';
 
 export class TapoPlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service;
@@ -29,7 +30,11 @@ export class TapoPlatform implements DynamicPlatformPlugin {
   private readonly activeAccessories: Map<string, TapoLightAccessory> = new Map();
   
   public readonly config: TapoPlatformConfig;
-  public readonly credentials: TapoCredentials;
+  public credentials: TapoCredentials;
+  private credentialMode: 'traditional' | 'secret-request';
+  private secretRequestService?: SecretRequestService;
+  private credentialsReady = false;
+  private pendingAccessories: Array<{ accessory: PlatformAccessory; config: TapoDeviceConfig }> = [];
 
   constructor(
     public readonly log: Logger,
@@ -40,22 +45,59 @@ export class TapoPlatform implements DynamicPlatformPlugin {
     this.Characteristic = this.api.hap.Characteristic;
     this.config = config as TapoPlatformConfig;
     
-    // Validate configuration
-    if (!this.config.email || !this.config.password) {
-      this.log.error('TP-Link account email and password are required in config');
-      this.credentials = { email: '', password: '' };
-      return;
-    }
+    // Determine credential mode (default to traditional for backward compatibility)
+    this.credentialMode = this.config.credentialType || 'traditional';
+    this.credentials = { email: '', password: '' }; // Will be populated based on mode
     
-    // Decrypt credentials if encrypted
-    try {
-      const storagePath = this.api.user.storagePath();
-      this.credentials = getDecryptedCredentials(this.config, storagePath);
-      this.log.info('Credentials loaded successfully');
-    } catch (error) {
-      this.log.error('Failed to decrypt credentials:', error);
-      this.credentials = { email: '', password: '' };
-      return;
+    // Load credentials based on mode
+    if (this.credentialMode === 'traditional') {
+      // Traditional mode: decrypt credentials from config
+      if (!this.config.email || !this.config.password) {
+        this.log.error('TP-Link account email and password are required in config for traditional mode');
+        return;
+      }
+      
+      try {
+        const storagePath = this.api.user.storagePath();
+        this.credentials = getDecryptedCredentials(this.config, storagePath);
+        this.log.info('Credentials loaded successfully (traditional mode)');
+        this.credentialsReady = true;
+      } catch (error) {
+        this.log.error('Failed to decrypt credentials:', error);
+        return;
+      }
+    } else {
+      // Secret Request mode: credentials will be delivered via push notification
+      if (!this.config.secretName) {
+        this.log.error('secretName is required in config for secret-request mode');
+        return;
+      }
+      
+      this.log.info('Using Secret Request mode - credentials will be requested from iPhone');
+      this.credentialsReady = false;
+      
+      // Initialize Secret Request service
+      this.secretRequestService = new SecretRequestService(
+        {
+          secretName: this.config.secretName,
+          serverUrl: this.config.secretServerUrl,
+          timeoutSeconds: this.config.secretTimeout,
+        },
+        this.log,
+      );
+      
+      // Listen for credentials
+      this.secretRequestService.on('credentialsReceived', (credentials: TapoCredentials) => {
+        this.log.info('[SecretRequest] Credentials received, initializing devices...');
+        this.credentials = credentials;
+        this.credentialsReady = true;
+        this.initializePendingAccessories();
+      });
+      
+      this.secretRequestService.on('requestFailed', (error: Error) => {
+        this.log.error('[SecretRequest] Failed to get credentials:', error.message);
+        this.log.error('[SecretRequest] Devices will remain unavailable until Homebridge is restarted.');
+      });
     }
     
     if (!this.config.devices || this.config.devices.length === 0) {
@@ -71,6 +113,13 @@ export class TapoPlatform implements DynamicPlatformPlugin {
     // When Homebridge finishes loading cached accessories, discover devices
     this.api.on('didFinishLaunching', () => {
       this.discoverDevices();
+      
+      // Start secret request if in secret-request mode
+      if (this.credentialMode === 'secret-request' && this.secretRequestService) {
+        this.secretRequestService.startSecretRequest().catch(error => {
+          this.log.error('[SecretRequest] Failed to start request:', error);
+        });
+      }
     });
   }
 
@@ -159,6 +208,14 @@ export class TapoPlatform implements DynamicPlatformPlugin {
    * Create the appropriate accessory instance based on device type
    */
   private createAccessory(accessory: PlatformAccessory, config: TapoDeviceConfig) {
+    // If credentials not ready (secret-request mode), defer initialization
+    if (!this.credentialsReady) {
+      this.log.info(`[${config.name}] Deferring initialization until credentials are available`);
+      this.pendingAccessories.push({ accessory, config });
+      // Still create a placeholder so device shows in HomeKit (will show as "No Response")
+      return;
+    }
+    
     // Remove old instance if it exists
     const oldInstance = this.activeAccessories.get(accessory.UUID);
     if (oldInstance) {
@@ -183,5 +240,25 @@ export class TapoPlatform implements DynamicPlatformPlugin {
       default:
         this.log.warn(`[${config.name}] Unsupported device type: ${config.type} (normalized: ${normalizedType})`);
     }
+  }
+  
+  /**
+   * Initialize accessories that were pending credential availability
+   */
+  private initializePendingAccessories() {
+    if (this.pendingAccessories.length === 0) {
+      return;
+    }
+    
+    this.log.info(`Initializing ${this.pendingAccessories.length} pending device(s)...`);
+    
+    const pending = [...this.pendingAccessories];
+    this.pendingAccessories = [];
+    
+    for (const { accessory, config } of pending) {
+      this.createAccessory(accessory, config);
+    }
+    
+    this.log.info('All devices initialized successfully!');
   }
 }

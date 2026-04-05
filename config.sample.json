@@ -9,6 +9,8 @@
     {
       "platform": "TapoStoyanov",
       "name": "Tapo Platform",
+      "_comment": "=== TRADITIONAL MODE (credentials stored encrypted on disk) ===",
+      "credentialType": "traditional",
       "email": "your-tapo-email@example.com",
       "password": "your-tapo-password",
       "pollingInterval": 30,
@@ -29,5 +31,24 @@
         "port": 51827
       }
     }
-  ]
+  ],
+  "_comment_secret_request": "=== ALTERNATIVE: SECRET REQUEST MODE (credentials via iPhone push, never stored on disk) ===",
+  "_example_secret_request": {
+    "platform": "TapoStoyanov",
+    "name": "Tapo Platform",
+    "credentialType": "secret-request",
+    "secretName": "tapo-credentials",
+    "secretServerUrl": "http://localhost:8420",
+    "secretTimeout": 43200,
+    "pollingInterval": 30,
+    "devices": [
+      {
+        "name": "Living Room Light",
+        "ip": "192.168.1.100",
+        "type": "light"
+      }
+    ],
+    "_note": "Devices appear immediately but show 'No Response' until you approve the secret request on your iPhone",
+    "_setup": "1. Run secret-request server (docker-compose up), 2. Store credentials in iOS Keychain via Scriptable, 3. Restart Homebridge and approve push notification"
+  }
 }

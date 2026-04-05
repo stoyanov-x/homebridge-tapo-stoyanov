@@ -6,8 +6,9 @@ A Homebridge plugin for controlling TP-Link Tapo smart devices that are not Matt
 
 - **Full HomeKit Integration**: Control your Tapo devices through the Home app, Siri, and automation
 - **Custom Configuration UI**: Easy-to-use web interface for device discovery and setup
-- **Automatic Device Discovery**: Scan your network to find all Tapo devices
-- **Encrypted Credentials**: Secure storage of your TP-Link account credentials
+- **Automatic Device Discovery**: Scan your network to find all Tapo devices  
+- **Encrypted Credentials**: Secure storage of your TP-Link account credentials  
+- **Secret Request Support**: Optional credential-free operation via iPhone push notifications (never stores credentials on disk)
 - **Device Selection**: Choose which devices to expose to HomeKit with visual device cards
 - **Tapo L430C Support**: RGB color bulbs with full brightness, color, and color temperature control
 - **KLAP Protocol**: Uses the latest KLAP authentication protocol for secure communication
@@ -101,6 +102,109 @@ If you prefer to edit the config file directly, add this to your Homebridge `con
 | `devices` | Yes | Array of device configurations |
 
 **Note:** The custom UI encrypts credentials using AES-256-GCM with a key derived from your Homebridge bridge credentials (MAC + PIN). This makes the encryption unique per installation.
+
+### Secret Request Mode (Advanced)
+
+For enhanced security, the plugin supports **Secret Request** - a credential delivery method that never stores your Tapo credentials on disk. Instead, credentials are delivered via push notification to your iPhone when Homebridge starts.
+
+#### How Secret Request Works
+
+1. On Homebridge startup, the plugin requests credentials from the secret-request server
+2. You receive a push notification on your iPhone
+3. Tap "Allow" to approve and deliver the credentials
+4. Credentials are held in memory only (never written to disk)
+5. If Homebridge restarts, the process repeats
+
+#### Prerequisites
+
+- **secret-request-ios server** running (see [secret-request-ios](https://github.com/stoyanov-x/secret-request-ios))
+- **iOS Shortcuts/Scriptable** setup with credentials stored in iOS Keychain
+- **VPN or local network** access between Homebridge and secret-request server
+
+#### Setup Instructions
+
+**1. Start the secret-request server:**
+
+```bash
+cd /path/to/secret-request-ios/server
+docker-compose up -d --build
+```
+
+**2. Store your Tapo credentials in iOS Keychain:**
+
+Using the Scriptable SecretRequest script:
+- Open Scriptable app on your iPhone
+- Run the SecretRequest script
+- Select "Store Multi-Part Secret"
+- Name: `tapo-credentials`
+- Fields:
+  - `email`: your-tapo-email@example.com
+  - `password`: your-tapo-password
+
+**3. Configure the plugin to use Secret Request:**
+
+Via Custom UI:
+1. Open plugin settings
+2. Select "Secret Request (iPhone Push)" as credential method
+3. Enter secret name: `tapo-credentials`
+4. Server URL: `http://localhost:8420` (or your server address)
+5. Timeout: `12` hours (configurable 1-48 hours)
+6. Add devices manually by IP address (discovery isn't available without credentials)
+7. Save configuration
+
+Or manually in `config.json`:
+
+```json
+{
+  "platform": "TapoStoyanov",
+  "name": "Tapo Platform",
+  "credentialType": "secret-request",
+  "secretName": "tapo-credentials",
+  "secretServerUrl": "http://localhost:8420",
+  "secretTimeout": 43200,
+  "pollingInterval": 30,
+  "devices": [
+    {
+      "name": "Living Room Light",
+      "ip": "192.168.1.100",
+      "type": "light"
+    }
+  ]
+}
+```
+
+**4. Restart Homebridge**
+
+Devices will appear in HomeKit immediately but show "No Response" until you approve the secret request on your iPhone.
+
+#### Configuration Options (Secret Request Mode)
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `credentialType` | Yes | Must be `secret-request` |
+| `secretName` | Yes | Name of the secret stored in iOS Keychain (e.g., `tapo-credentials`) |
+| `secretServerUrl` | Yes | URL of the secret-request server (default: `http://localhost:8420`) |
+| `secretTimeout` | No | Seconds to wait for secret approval (default: 43200 = 12 hours, range: 3600-172800) |
+
+#### Troubleshooting Secret Request
+
+**Devices show "No Response" after Homebridge restart:**
+- Check Homebridge logs for `[SecretRequest]` messages
+- Verify secret-request server is running: `curl http://localhost:8420/health`
+- Check your iPhone for pending push notifications (ntfy app)
+- Ensure secret name matches: `tapo-credentials`
+- Verify credentials are stored in iOS Keychain (run Scriptable script → "List Secrets")
+
+**Request times out:**
+- Default timeout is 12 hours - you have plenty of time to approve
+- Check ntfy notifications are enabled on your iPhone
+- Ensure VPN is active if server is not on local network
+
+**How to switch back to Traditional mode:**
+- Open plugin settings
+- Select "Traditional (TP-Link Account)" 
+- Enter your credentials
+- Save - old secret-request settings will be removed automatically
 
 ### Device Configuration
 
