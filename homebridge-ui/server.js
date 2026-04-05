@@ -217,7 +217,7 @@ class PluginUiServer extends HomebridgePluginUiServer {
           e2e: true, // Always test with E2E encryption
         });
 
-        // Test 1: Health check
+        // Test 1: Health check (no auth required)
         try {
           const healthy = await client.healthCheck();
           results.health = {
@@ -231,62 +231,58 @@ class PluginUiServer extends HomebridgePluginUiServer {
           };
         }
 
-        // Test 2: API key authentication (if provided)
-        if (apiKey) {
-          try {
-            // Test with API key (already configured in client)
-            const withKey = await client.healthCheck();
-            
-            // Test without API key
-            const clientNoKey = new SecretRequestClient({
-              serverUrl,
-              apiKey: undefined,
-              e2e: true,
-            });
-            const withoutKey = await clientNoKey.healthCheck().catch(() => false);
-            
-            if (withKey && !withoutKey) {
-              results.auth = {
-                success: true,
-                message: 'API key authentication working correctly',
-              };
-            } else if (withKey && withoutKey) {
-              results.auth = {
-                success: true,
-                message: 'API key accepted (server may not require auth)',
-                warning: true,
-              };
-            } else {
-              results.auth = {
-                success: false,
-                message: 'API key rejected - check your API key',
-              };
+        // Test 2: E2E secret request with configured settings
+        try {
+          // Read config to get secret name and timeout
+          const fs = require('fs');
+          const configPath = this.homebridgeConfigPath;
+          let secretName = 'homebridge-test';
+          let secretTimeout = 10; // 10 seconds for test
+          
+          if (configPath) {
+            try {
+              const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+              const pluginConfig = configData.platforms?.find(p => p.platform === 'TapoStoyanov');
+              if (pluginConfig?.secretName) {
+                secretName = pluginConfig.secretName;
+              }
+            } catch {
+              // Use defaults if can't read config
             }
-          } catch (error) {
-            results.auth = {
+          }
+          
+          // Create a test secret request (will timeout quickly)
+          const requestId = await client.createRequest(secretName, secretTimeout);
+          
+          if (requestId) {
+            results.e2e = {
+              success: true,
+              message: `E2E secret request created successfully (will timeout in ${secretTimeout}s)`,
+              requestId: requestId,
+            };
+          } else {
+            results.e2e = {
               success: false,
-              message: `Auth test failed: ${error.message}`,
+              message: 'Failed to create secret request',
+            };
+          }
+        } catch (error) {
+          // Check if it's an auth error
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            results.e2e = {
+              success: false,
+              message: 'API key authentication failed - check your API key',
+            };
+          } else {
+            results.e2e = {
+              success: false,
+              message: `E2E test failed: ${error.message}`,
             };
           }
         }
 
-        // Test 3: E2E encryption capability
-        try {
-          // E2E is client-side feature, just verify it's enabled
-          results.e2e = {
-            success: true,
-            message: 'E2E encryption enabled (server never sees plaintext)',
-          };
-        } catch (error) {
-          results.e2e = {
-            success: false,
-            message: `E2E test failed: ${error.message}`,
-          };
-        }
-
         // Determine overall success
-        const allPassed = results.health?.success && 
-                         (results.auth?.success !== false);
+        const allPassed = results.health?.success && results.e2e?.success;
 
         return {
           success: allPassed,
