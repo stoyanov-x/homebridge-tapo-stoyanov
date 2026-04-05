@@ -38,6 +38,7 @@ export class SecretRequestService extends EventEmitter {
   private errorMessage?: string;
   private requestId?: string;
   private abortController?: AbortController;
+  private waitingMessagesInterval?: NodeJS.Timeout;
 
   constructor(config: SecretRequestServiceConfig, log: Logger) {
     super();
@@ -258,9 +259,17 @@ export class SecretRequestService extends EventEmitter {
    * Start periodic "still waiting" log messages
    */
   private startWaitingMessages(): void {
-    const interval = setInterval(() => {
+    // Clear any existing interval
+    if (this.waitingMessagesInterval) {
+      clearInterval(this.waitingMessagesInterval);
+    }
+    
+    this.waitingMessagesInterval = setInterval(() => {
       if (this.state !== 'requesting' || !this.requestStartTime) {
-        clearInterval(interval);
+        if (this.waitingMessagesInterval) {
+          clearInterval(this.waitingMessagesInterval);
+          this.waitingMessagesInterval = undefined;
+        }
         return;
       }
       
@@ -268,7 +277,10 @@ export class SecretRequestService extends EventEmitter {
       const remaining = ((this.config.timeoutSeconds || 43200) * 1000) - elapsed;
       
       if (remaining <= 0) {
-        clearInterval(interval);
+        if (this.waitingMessagesInterval) {
+          clearInterval(this.waitingMessagesInterval);
+          this.waitingMessagesInterval = undefined;
+        }
         return;
       }
       
@@ -288,6 +300,12 @@ export class SecretRequestService extends EventEmitter {
    * Cancel ongoing request
    */
   async cancel(): Promise<void> {
+    // Clear waiting messages interval
+    if (this.waitingMessagesInterval) {
+      clearInterval(this.waitingMessagesInterval);
+      this.waitingMessagesInterval = undefined;
+    }
+    
     if (this.state !== 'requesting') {
       return;
     }
