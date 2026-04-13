@@ -19,8 +19,8 @@ show_menu() {
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
     echo "  1) ✅ Run Local CI Checks"
-    echo "  2) 🔨 Build Plugin"
-    echo "  3) 🏠 Deploy Plugin to Remote"
+    echo "  2) 🔨 Build Homebridge Plugin"
+    echo "  3) 🏠 Deploy Homebridge Plugin"
     echo "  4) 🧹 Clean Build Artifacts"
     echo ""
     echo "  0) Exit"
@@ -40,13 +40,13 @@ while true; do
             read -p "Press Enter to continue..."
             ;;
         2)
-            echo -e "${YELLOW}Building plugin...${NC}"
+            echo -e "${YELLOW}Building Homebridge plugin...${NC}"
             pnpm install && pnpm run build
             echo -e "${GREEN}✓ Build complete${NC}"
             read -p "Press Enter to continue..."
             ;;
         3)
-            echo -e "${YELLOW}Deploying plugin...${NC}"
+            echo -e "${YELLOW}Deploying Homebridge plugin...${NC}"
             ./scripts/deploy.sh
             read -p "Press Enter to continue..."
             ;;
