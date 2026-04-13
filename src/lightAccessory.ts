@@ -184,8 +184,8 @@ export class TapoLightAccessory {
         `${colorMode}`
       );
 
-    } catch (error: any) {
-      this.log.warn(`[${this.config.name}] Poll failed:`, error.message);
+    } catch (error) {
+      this.log.warn(`[${this.config.name}] Poll failed:`, error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -209,8 +209,8 @@ export class TapoLightAccessory {
       
       this.state.On = on;
       this.log.info(`[${this.config.name}] Power: ${on ? 'ON' : 'OFF'}`);
-    } catch (error: any) {
-      this.log.error(`[${this.config.name}] Power error:`, error.message);
+    } catch (error) {
+      this.log.error(`[${this.config.name}] Power error:`, error instanceof Error ? error.message : String(error));
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
@@ -236,8 +236,8 @@ export class TapoLightAccessory {
       await this.client.setBrightness(brightness);
       this.state.Brightness = brightness;
       this.log.info(`[${this.config.name}] Brightness: ${brightness}%`);
-    } catch (error: any) {
-      this.log.error(`[${this.config.name}] Brightness error:`, error.message);
+    } catch (error) {
+      this.log.error(`[${this.config.name}] Brightness error:`, error instanceof Error ? error.message : String(error));
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
@@ -272,8 +272,8 @@ export class TapoLightAccessory {
       await this.client.setColorTemperature(clampedKelvin);
       this.state.ColorTemperature = mired;
       this.log.info(`[${this.config.name}] Color temp: ${clampedKelvin}K`);
-    } catch (error: any) {
-      this.log.error(`[${this.config.name}] Color temp error:`, error.message);
+    } catch (error) {
+      this.log.error(`[${this.config.name}] Color temp error:`, error instanceof Error ? error.message : String(error));
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
   }
@@ -354,8 +354,8 @@ export class TapoLightAccessory {
       try {
         await this.client.setColor(this.state.Hue, this.state.Saturation);
         this.log.info(`[${this.config.name}] Color: H${this.state.Hue}° S${this.state.Saturation}%`);
-      } catch (error: any) {
-        this.log.error(`[${this.config.name}] Color error:`, error.message);
+      } catch (error) {
+        this.log.error(`[${this.config.name}] Color error:`, error instanceof Error ? error.message : String(error));
       }
     }, COLOR_UPDATE_BATCH_DELAY);
   }

@@ -97,7 +97,7 @@ export class TapoClient {
       await this.authenticateWithVersion(1);
       this.klapVersion = 1;
       return;
-    } catch (error: any) {
+    } catch {
       // KLAP v1 failed, try v2
     }
 
@@ -106,8 +106,8 @@ export class TapoClient {
       await this.authenticateWithVersion(2);
       this.klapVersion = 2;
       return;
-    } catch (error: any) {
-      throw new Error(`Authentication failed with both KLAP v1 and v2: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Authentication failed with both KLAP v1 and v2: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -127,8 +127,8 @@ export class TapoClient {
     let response1;
     try {
       response1 = await this.httpPost('/app/handshake1', localSeed);
-    } catch (error: any) {
-      throw new Error(`Handshake1 network error: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Handshake1 network error: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     if (response1.statusCode !== 200) {
@@ -172,8 +172,8 @@ export class TapoClient {
     let response2;
     try {
       response2 = await this.httpPost('/app/handshake2', clientHash, { 'Cookie': cookie });
-    } catch (error: any) {
-      throw new Error(`Handshake2 network error: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Handshake2 network error: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     if (response2.statusCode !== 200) {
@@ -230,7 +230,7 @@ export class TapoClient {
   /**
    * Execute a request to the device
    */
-  private async executeRequest(method: string, params?: Record<string, any>): Promise<TapoResponse> {
+  private async executeRequest(method: string, params?: Record<string, unknown>): Promise<TapoResponse> {
     // Ensure we have a valid session
     if (!this.session || !this.cookie || (this.session.timeout && Date.now() > this.session.timeout)) {
       await this.authenticate();
@@ -250,35 +250,30 @@ export class TapoClient {
     // Encrypt the request
     const { encryptedData, seq } = this.encryptRequest(requestJson, this.session);
 
-    try {
-      const response = await this.httpPost(`/app/request?seq=${seq}`, encryptedData, {
-        'Cookie': this.cookie,
-      });
+    const response = await this.httpPost(`/app/request?seq=${seq}`, encryptedData, {
+      'Cookie': this.cookie,
+    });
 
-      if (response.statusCode === 403) {
-        // Session invalid, clear and retry
-        this.session = undefined;
-        this.cookie = undefined;
-        return this.executeRequest(method, params);
-      }
-
-      if (response.statusCode !== 200) {
-        throw new Error(`Request failed with status ${response.statusCode}`);
-      }
-
-      // Decrypt the response
-      const decryptedData = this.decryptResponse(response.data, this.session);
-      const result: TapoResponse = JSON.parse(decryptedData);
-
-      if (result.error_code !== 0) {
-        throw new Error(`Device returned error: ${result.error_code} - ${result.msg || 'Unknown error'}`);
-      }
-
-      return result;
-
-    } catch (error: any) {
-      throw error;
+    if (response.statusCode === 403) {
+      // Session invalid, clear and retry
+      this.session = undefined;
+      this.cookie = undefined;
+      return this.executeRequest(method, params);
     }
+
+    if (response.statusCode !== 200) {
+      throw new Error(`Request failed with status ${response.statusCode}`);
+    }
+
+    // Decrypt the response
+    const decryptedData = this.decryptResponse(response.data, this.session);
+    const result: TapoResponse = JSON.parse(decryptedData);
+
+    if (result.error_code !== 0) {
+      throw new Error(`Device returned error: ${result.error_code} - ${result.msg || 'Unknown error'}`);
+    }
+
+    return result;
   }
 
   /**
@@ -292,7 +287,7 @@ export class TapoClient {
   /**
    * Set device state (power, brightness, color, etc.)
    */
-  async setDeviceInfo(params: Record<string, any>): Promise<void> {
+  async setDeviceInfo(params: Record<string, unknown>): Promise<void> {
     await this.executeRequest('set_device_info', params);
   }
 
@@ -381,7 +376,7 @@ export class TapoClient {
    */
   private decryptResponse(data: Buffer, session: KLAPSession): string {
     // Extract signature (32 bytes) and ciphertext
-    const signature = data.slice(0, 32);
+    const _signature = data.slice(0, 32);
     const ciphertext = data.slice(32);
     
     // Generate full IV for current seq

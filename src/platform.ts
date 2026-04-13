@@ -242,7 +242,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
 
     // Create new instance based on device type
     switch (normalizedType) {
-      case 'light':
+      case 'light': {
         const lightAccessory = new TapoLightAccessory(
           this,
           accessory,
@@ -258,6 +258,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
           this.pendingAccessories.push({ accessory, config });
         }
         break;
+      }
 
       default:
         this.log.warn(`[${config.name}] Unsupported device type: ${config.type} (normalized: ${normalizedType})`);

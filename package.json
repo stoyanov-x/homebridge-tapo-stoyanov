@@ -1,14 +1,14 @@
 {
   "name": "homebridge-tapo-stoyanov",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Homebridge plugin for Tapo smart devices (lights, bulbs) that are not Matter compatible",
   "main": "dist/index.js",
   "packageManager": "pnpm@9.12.3",
   "scripts": {
-    "build": "tsc",
+    "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "tsc -w",
-    "prepublishOnly": "npm run build",
-    "preinstall": "npx only-allow pnpm"
+    "build": "rimraf ./dist && tsc",
+    "prepublishOnly": "pnpm run lint && pnpm run build"
   },
   "keywords": [
     "homebridge-plugin",
@@ -49,7 +49,11 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
     "homebridge": "^1.6.0",
+    "rimraf": "^5.0.0",
     "typescript": "^5.3.0"
   }
 }

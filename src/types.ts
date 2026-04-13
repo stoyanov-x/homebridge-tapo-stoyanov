@@ -52,7 +52,7 @@ export interface TapoDeviceInfo {
   auto_biorhythm_light_enable?: boolean;
 }
 
-export interface TapoResponse<T = any> {
+export interface TapoResponse<T = unknown> {
   error_code: number;
   result?: T;
   method?: string;
