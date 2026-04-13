@@ -97,7 +97,7 @@ export class TapoClient {
       await this.authenticateWithVersion(1);
       this.klapVersion = 1;
       return;
-    } catch (error: any) {
+    } catch {
       // KLAP v1 failed, try v2
     }
 
@@ -106,8 +106,8 @@ export class TapoClient {
       await this.authenticateWithVersion(2);
       this.klapVersion = 2;
       return;
-    } catch (error: any) {
-      throw new Error(`Authentication failed with both KLAP v1 and v2: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Authentication failed with both KLAP v1 and v2: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -127,8 +127,8 @@ export class TapoClient {
     let response1;
     try {
       response1 = await this.httpPost('/app/handshake1', localSeed);
-    } catch (error: any) {
-      throw new Error(`Handshake1 network error: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Handshake1 network error: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     if (response1.statusCode !== 200) {
@@ -172,8 +172,8 @@ export class TapoClient {
     let response2;
     try {
       response2 = await this.httpPost('/app/handshake2', clientHash, { 'Cookie': cookie });
-    } catch (error: any) {
-      throw new Error(`Handshake2 network error: ${error.message}`);
+    } catch (error) {
+      throw new Error(`Handshake2 network error: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     if (response2.statusCode !== 200) {
@@ -230,7 +230,7 @@ export class TapoClient {
   /**
    * Execute a request to the device
    */
-  private async executeRequest(method: string, params?: Record<string, any>): Promise<TapoResponse> {
+  private async executeRequest(method: string, params?: Record<string, unknown>): Promise<TapoResponse> {
     // Ensure we have a valid session
     if (!this.session || !this.cookie || (this.session.timeout && Date.now() > this.session.timeout)) {
       await this.authenticate();
@@ -287,7 +287,7 @@ export class TapoClient {
   /**
    * Set device state (power, brightness, color, etc.)
    */
-  async setDeviceInfo(params: Record<string, any>): Promise<void> {
+  async setDeviceInfo(params: Record<string, unknown>): Promise<void> {
     await this.executeRequest('set_device_info', params);
   }
 
