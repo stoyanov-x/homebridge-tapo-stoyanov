@@ -5,11 +5,11 @@
   "main": "dist/index.js",
   "packageManager": "pnpm@9.12.3",
   "scripts": {
-    "lint": "eslint src/**.ts",
-    "build": "rimraf ./dist && tsc",
+    "preinstall": "pnpm dlx only-allow pnpm",
+    "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "tsc -w",
-    "prepublishOnly": "pnpm run lint && pnpm run build",
-    "preinstall": "npx only-allow pnpm"
+    "build": "rimraf ./dist && tsc",
+    "prepublishOnly": "pnpm run lint && pnpm run build"
   },
   "keywords": [
     "homebridge-plugin",
