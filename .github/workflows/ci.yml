@@ -1,4 +1,4 @@
-name: CI
+name: Homebridge Plugin CI
 
 on:
   push:
