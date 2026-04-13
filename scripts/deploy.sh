@@ -20,6 +20,7 @@ cleanup() {
     ssh -O exit -o ControlPath="$SSH_CONTROL_PATH" "$REMOTE_USER@$REMOTE_HOST" 2>/dev/null || true
 }
 trap cleanup EXIT
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -44,7 +45,8 @@ run_step() {
 # Build the plugin (install, compile, pack)
 build_plugin() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    cd "$script_dir"
+    local repo_root="$(cd "$script_dir/.." && pwd)"
+    cd "$repo_root"
     
     log_info "Building plugin..."
     
@@ -58,16 +60,17 @@ build_plugin() {
 # Find the latest .tgz file by semver (largest version number)
 find_latest_tgz() {
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local repo_root="$(cd "$script_dir/.." && pwd)"
     
     # Find all .tgz files matching the plugin pattern and sort by version
-    local latest=$(ls -1 "$script_dir"/$PLUGIN_PATTERN 2>/dev/null | \
+    local latest=$(ls -1 "$repo_root"/$PLUGIN_PATTERN 2>/dev/null | \
         sed 's/.*-\([0-9]*\.[0-9]*\.[0-9]*\)\.tgz/\1 &/' | \
         sort -t. -k1,1n -k2,2n -k3,3n | \
         tail -1 | \
         awk '{print $2}')
     
     if [[ -z "$latest" ]]; then
-        log_error "No .tgz files found in $script_dir"
+        log_error "No .tgz files found in $repo_root"
         exit 1
     fi
     

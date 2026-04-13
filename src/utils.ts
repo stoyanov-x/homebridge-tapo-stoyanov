@@ -3,6 +3,7 @@
  */
 
 import * as crypto from 'crypto';
+import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { TapoClient } from './tapoClient';
@@ -183,6 +184,7 @@ export function tryBase64Decode(value: string | undefined): string | undefined {
     
     // Verify the decoded string is valid UTF-8 with printable characters
     // If it contains mostly control characters or invalid UTF-8, it's probably not base64-encoded text
+    // eslint-disable-next-line no-control-regex
     const printableRatio = decoded.replace(/[\x00-\x1F\x7F-\x9F]/g, '').length / decoded.length;
     if (printableRatio < 0.9) {
       return value;
@@ -231,7 +233,6 @@ export function getDecryptedCredentials(
  * Get local subnet(s) to scan
  */
 function getLocalSubnets(): string[] {
-  const os = require('os');
   const interfaces = os.networkInterfaces();
   const subnets: string[] = [];
 
