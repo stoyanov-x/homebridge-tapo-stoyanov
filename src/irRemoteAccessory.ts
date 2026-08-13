@@ -37,6 +37,9 @@ import { decodeBase64Label, smartCaseLabel, isOpaqueKeyName } from './utils';
 export class IrRemoteAccessory {
   private static readonly DISPLAY_ORDER_ELEMENT_START = 0x01;
   private static readonly DISPLAY_ORDER_ELEMENT_END = 0x00;
+  private static readonly MEDIA_STATE_PLAY = 0;
+  private static readonly MEDIA_STATE_PAUSE = 1;
+  private static readonly MEDIA_STATE_STOP = 2;
 
   private readonly thing: TapoThingInfo;
   private readonly client: TapoCloudClient;
@@ -46,6 +49,8 @@ export class IrRemoteAccessory {
   private readonly buttons: Service[] = [];
   private readonly buttonTimers: NodeJS.Timeout[] = [];
   private readonly keyById = new Map<number, TapoIrKey>();
+  private readonly keyByName = new Map<string, TapoIrKey>();
+  private readonly keyByDisplay = new Map<string, TapoIrKey>();
 
   // Optimistic state (IR is fire-and-forget; we can't query the physical device)
   private state = {
@@ -53,6 +58,7 @@ export class IrRemoteAccessory {
     muted: false,
     volume: 50, // 0-100, tracked optimistically for the Home app volume slider
     activeIdentifier: 0,
+    mediaState: IrRemoteAccessory.MEDIA_STATE_PAUSE,
   };
 
   constructor(
@@ -89,6 +95,19 @@ export class IrRemoteAccessory {
       .onSet(this.setActiveIdentifier.bind(this))
       .onGet(() => this.state.activeIdentifier);
 
+    // RemoteKey powers the Home app / Control Center Remote UI (arrows,
+    // select, back, previous/next, play/pause).
+    this.television.getCharacteristic(this.platform.Characteristic.RemoteKey)
+      .onSet(this.setRemoteKey.bind(this));
+
+    // Media state is optional on TVs, but helps the Apple Remote surface the
+    // play/pause transport in a more TV-native way.
+    this.television.getCharacteristic(this.platform.Characteristic.CurrentMediaState)
+      .onGet(() => this.state.mediaState);
+    this.television.getCharacteristic(this.platform.Characteristic.TargetMediaState)
+      .onSet(this.setTargetMediaState.bind(this))
+      .onGet(() => this.state.mediaState);
+
     // ── TelevisionSpeaker service ──────────────────────────────────────
     this.speaker = this.accessory.getService(this.platform.Service.TelevisionSpeaker)
       || this.accessory.addService(this.platform.Service.TelevisionSpeaker);
@@ -124,6 +143,7 @@ export class IrRemoteAccessory {
   async initializeDevice(): Promise<void> {
     try {
       const keys = await this.client.listKeys(this.thing);
+      this.cacheKeys(keys);
       this.buildInputSources(keys);
       this.updateDisplayOrder();
       this.buildButtons(keys);
@@ -135,6 +155,23 @@ export class IrRemoteAccessory {
       );
     } catch (error) {
       this.log.error(`[${this.config.name}] Failed to load IR keys:`, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
+   * Cache the remote's full key map by both send-by name and decoded display
+   * label so RemoteKey handlers can resolve navigation/menu keys.
+   */
+  private cacheKeys(keys: TapoIrKey[]): void {
+    this.keyByName.clear();
+    this.keyByDisplay.clear();
+
+    for (const key of keys) {
+      this.keyByName.set(key.name, key);
+      const display = decodeBase64Label(key.display_name).trim().toUpperCase();
+      if (display && !this.keyByDisplay.has(display)) {
+        this.keyByDisplay.set(display, key);
+      }
     }
   }
 
@@ -348,6 +385,34 @@ export class IrRemoteAccessory {
     return 0; // Other
   }
 
+  /**
+   * Resolve an IR key by its send-by name or its decoded display label.
+   */
+  private findKey(name?: string, display?: string): TapoIrKey | undefined {
+    if (name) {
+      const key = this.keyByName.get(name);
+      if (key) {
+        return key;
+      }
+    }
+    if (display) {
+      return this.keyByDisplay.get(display.toUpperCase());
+    }
+    return undefined;
+  }
+
+  /**
+   * Fire a resolved key object and log it by friendly label.
+   */
+  private async fireKey(key: TapoIrKey | undefined, context: string): Promise<void> {
+    if (!key) {
+      this.log.debug(`[${this.config.name}] No IR key mapped for ${context}`);
+      return;
+    }
+    this.log.info(`[${this.config.name}] ${context}: ${this.labelFor(key)}`);
+    await this.fire(key.name);
+  }
+
   // ── Characteristic handlers ───────────────────────────────────────────
 
   /**
@@ -386,6 +451,92 @@ export class IrRemoteAccessory {
     }
     this.log.info(`[${this.config.name}] Select input: ${this.labelFor(key)}`);
     await this.fire(key.name);
+  }
+
+  /**
+   * Handle remote-control buttons from the Apple TV Remote / Home TV remote UI.
+   */
+  async setRemoteKey(value: CharacteristicValue) {
+    const remoteKey = value as number;
+
+    switch (remoteKey) {
+      case 2: // NEXT_TRACK
+        await this.fireKey(this.findKey('NEXT'), 'Remote next');
+        return;
+      case 3: // PREVIOUS_TRACK
+        await this.fireKey(this.findKey('PREVIOUS'), 'Remote previous');
+        return;
+      case 4: // ARROW_UP
+        await this.fireKey(this.findKey(undefined, 'UP'), 'Remote up');
+        return;
+      case 5: // ARROW_DOWN
+        await this.fireKey(this.findKey(undefined, 'DOWN'), 'Remote down');
+        return;
+      case 6: // ARROW_LEFT
+        await this.fireKey(this.findKey('PREVIOUS'), 'Remote left');
+        return;
+      case 7: // ARROW_RIGHT
+        await this.fireKey(this.findKey('NEXT'), 'Remote right');
+        return;
+      case 8: // SELECT
+        await this.fireKey(this.findKey('PLAY'), 'Remote select');
+        return;
+      case 9: // BACK
+      case 10: // EXIT
+        await this.fireKey(this.findKey(undefined, 'MENU'), 'Remote menu');
+        return;
+      case 11: // PLAY_PAUSE
+        await this.togglePlayPause('Remote play/pause');
+        return;
+      default:
+        this.log.debug(`[${this.config.name}] Unhandled RemoteKey: ${remoteKey}`);
+    }
+  }
+
+  /**
+   * Handle the optional TargetMediaState characteristic (play/pause/stop).
+   */
+  async setTargetMediaState(value: CharacteristicValue) {
+    const target = value as number;
+
+    switch (target) {
+      case IrRemoteAccessory.MEDIA_STATE_PLAY:
+        await this.play('Target media play');
+        return;
+      case IrRemoteAccessory.MEDIA_STATE_PAUSE:
+      case IrRemoteAccessory.MEDIA_STATE_STOP:
+        await this.pause('Target media pause');
+        return;
+      default:
+        this.log.debug(`[${this.config.name}] Unhandled TargetMediaState: ${target}`);
+    }
+  }
+
+  /**
+   * Toggle between PLAY and PAUSE based on the last media state we emitted.
+   */
+  private async togglePlayPause(context: string): Promise<void> {
+    if (this.state.mediaState === IrRemoteAccessory.MEDIA_STATE_PLAY) {
+      await this.pause(context);
+    } else {
+      await this.play(context);
+    }
+  }
+
+  private async play(context: string): Promise<void> {
+    const key = this.findKey('PLAY') || this.findKey('PAUSE');
+    await this.fireKey(key, context);
+    this.state.mediaState = IrRemoteAccessory.MEDIA_STATE_PLAY;
+    this.television.updateCharacteristic(this.platform.Characteristic.CurrentMediaState, this.state.mediaState);
+    this.television.updateCharacteristic(this.platform.Characteristic.TargetMediaState, this.state.mediaState);
+  }
+
+  private async pause(context: string): Promise<void> {
+    const key = this.findKey('PAUSE') || this.findKey('PLAY');
+    await this.fireKey(key, context);
+    this.state.mediaState = IrRemoteAccessory.MEDIA_STATE_PAUSE;
+    this.television.updateCharacteristic(this.platform.Characteristic.CurrentMediaState, this.state.mediaState);
+    this.television.updateCharacteristic(this.platform.Characteristic.TargetMediaState, this.state.mediaState);
   }
 
   /**
