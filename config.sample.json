@@ -24,6 +24,14 @@
           "name": "Bedroom Light",
           "ip": "192.168.1.101",
           "type": "light"
+        },
+        {
+          "_comment": "=== IR REMOTE (Tapo H110 hub) ===",
+          "name": "Edifier S2000 Mark III",
+          "type": "ir-remote",
+          "_comment2": "name must match the remote's nickname in the Tapo app. thingName is optional (used to disambiguate multiple remotes). irKeys is optional (defaults to all keys).",
+          "thingName": "802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002",
+          "irKeys": ["POWER", "VOL+", "VOL-", "MUTE"]
         }
       ],
       "_bridge": {

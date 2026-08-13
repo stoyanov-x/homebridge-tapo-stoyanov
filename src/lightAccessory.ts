@@ -50,15 +50,17 @@ export class TapoLightAccessory {
     private readonly credentialsReady: boolean = true,
   ) {
     // Initialize the Tapo client only if credentials are ready
-    if (credentialsReady) {
+    if (credentialsReady && config.ip) {
       this.client = new TapoClient(config.ip, this.platform.credentials);
+    } else if (credentialsReady && !config.ip) {
+      this.log.error(`[${config.name}] Light device is missing an IP address in config`);
     }
 
     // Set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.Manufacturer, DEVICE_MANUFACTURER)
       .setCharacteristic(this.platform.Characteristic.Model, DEVICE_MODEL)
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, config.ip.replace(/\./g, '-'));
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, (config.ip || config.mac || 'unknown').replace(/\./g, '-'));
 
     // Get or create the Lightbulb service
     this.service = this.accessory.getService(this.platform.Service.Lightbulb) 
@@ -105,6 +107,10 @@ export class TapoLightAccessory {
   public async initializeDevice() {
     // Create client if not already created
     if (!this.client) {
+      if (!this.config.ip) {
+        this.log.error(`[${this.config.name}] Cannot initialize light: missing IP address in config`);
+        return;
+      }
       this.client = new TapoClient(this.config.ip, this.platform.credentials);
     }
     

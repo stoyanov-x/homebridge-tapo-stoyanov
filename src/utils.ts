@@ -25,6 +25,7 @@ import {
 /**
  * Normalize device type from cloud API to internal type
  * Maps SMART.TAPOBULB, SMART.TAPOPLUG, etc. to 'light', 'plug', etc.
+ * Also maps ir.remote / ir_remote to 'ir-remote' (H110 hub IR remotes).
  * Returns the original type if not recognized (will trigger unsupported warning)
  */
 export function normalizeDeviceType(cloudType: string | undefined): string {
@@ -47,9 +48,35 @@ export function normalizeDeviceType(cloudType: string | undefined): string {
   if (typeUpper.includes('SWITCH')) {
     return 'switch';
   }
+  if (typeUpper === 'IR.REMOTE' || typeUpper === 'IR_REMOTE') {
+    return 'ir-remote';
+  }
   
   // Return original type for unrecognized devices - will trigger warning in platform
   return cloudType;
+}
+
+/**
+ * Decode a base64-encoded label from the Tapo cloud (nicknames, IR display names).
+ * Returns the decoded string, or the raw input if it isn't valid base64 text.
+ */
+export function decodeBase64Label(label: string | undefined): string {
+  if (!label) {
+    return '';
+  }
+  
+  try {
+    // The cloud stores labels as base64 of UTF-8 bytes
+    const decoded = Buffer.from(label, 'base64').toString('utf8');
+    // Only use the result if it looks like readable text (not binary garbage)
+    if (decoded && /^[\x20-\x7E\u00A0-\u024F\u2010-\u2027]*$/.test(decoded)) {
+      return decoded.trim();
+    }
+  } catch {
+    // fall through to returning the raw label
+  }
+  
+  return label;
 }
 
 /**

@@ -13,6 +13,7 @@ A Homebridge plugin for controlling TP-Link Tapo smart devices that are not Matt
 - **Tapo L430C Support**: RGB color bulbs with full brightness, color, and color temperature control
 - **KLAP Protocol**: Uses the latest KLAP authentication protocol for secure communication
 - **Status Polling**: Regular updates to keep HomeKit in sync with physical device state
+- **IR Remote Support (H110 Hub)**: Control paired IR remotes (TVs, speakers, etc.) through the Home app as HomeKit Televisions — fully cloud-based, no LAN access or device password needed
 
 ## Supported Devices
 
@@ -21,6 +22,12 @@ A Homebridge plugin for controlling TP-Link Tapo smart devices that are not Matt
   - Brightness (1-100%)
   - RGB Color (Hue 0-360°, Saturation 0-100%)  
   - Color Temperature (2500K-6500K)
+- **IR Remote (Tapo H110 Hub)** - any IR remote paired in the Tapo app
+  - Exposed as a HomeKit **Television** with a **TelevisionSpeaker**
+  - Power on/off (POWER key) via the TV Active characteristic
+  - Volume up/down and mute via the speaker's volume control
+  - One **Input Source** per IR key (e.g. Bluetooth, OPT, LINE1, PLAY...) — selecting one fires the IR command
+  - Controlled through the Tapo Cloud Thing API (the same path the mobile app uses), so it works over the internet with no LAN setup
 
 Future devices may include sensors and other Tapo products.
 
@@ -82,6 +89,12 @@ If you prefer to edit the config file directly, add this to your Homebridge `con
           "name": "Bedroom Light",
           "ip": "192.168.1.101",
           "type": "light"
+        },
+        {
+          "name": "Edifier S2000 Mark III",
+          "type": "ir-remote",
+          "thingName": "802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002",
+          "irKeys": ["POWER", "VOL+", "VOL-", "MUTE"]
         }
       ]
     }
@@ -102,6 +115,28 @@ If you prefer to edit the config file directly, add this to your Homebridge `con
 | `devices` | Yes | Array of device configurations |
 
 **Note:** The custom UI encrypts credentials using AES-256-GCM with a key derived from your Homebridge bridge credentials (MAC + PIN). This makes the encryption unique per installation.
+
+#### IR Remote configuration
+
+IR remotes are paired in the Tapo app under an **H110 hub** and are exposed by
+the plugin as HomeKit **Televisions**. They are controlled entirely through the
+Tapo Cloud Thing API — no `ip` or device password is needed.
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Must match the remote's nickname in the Tapo app (e.g. "Edifier S2000 Mark III") |
+| `type` | Yes | `"ir-remote"` |
+| `thingName` | No | The remote's cloud thingName (printed in the plugin log during discovery). Use it to disambiguate when you have multiple remotes with similar names |
+| `irKeys` | No | Optional list of IR key names to expose as HomeKit inputs. Omit to expose all keys the remote reports |
+
+To find your remote's `thingName`, enable debug logging and look for the
+`[IR Remote]` lines on startup — they list every remote found on the account
+with its `thingName`.
+
+**HomeKit mapping:**
+- TV power (Active) → `POWER` key
+- Volume up/down + mute (TelevisionSpeaker) → `VOL+` / `VOL-` / `MUTE` keys
+- Each other key becomes an **Input Source**; selecting it in the Home app fires the IR command
 
 ### Secret Request Mode (Advanced)
 

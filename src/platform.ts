@@ -15,8 +15,10 @@ import {
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { TapoLightAccessory } from './lightAccessory';
-import { TapoPlatformConfig, TapoDeviceConfig, TapoCredentials } from './types';
-import { getDecryptedCredentials, normalizeDeviceType, decryptCredential } from './utils';
+import { IrRemoteAccessory } from './irRemoteAccessory';
+import { TapoCloudClient } from './tapoCloudClient';
+import { TapoPlatformConfig, TapoDeviceConfig, TapoCredentials, TapoThingInfo, TapoAccessory } from './types';
+import { getDecryptedCredentials, normalizeDeviceType, decodeBase64Label, decryptCredential } from './utils';
 import { SecretRequestService } from './secretRequestService';
 
 export class TapoPlatform implements DynamicPlatformPlugin {
@@ -27,7 +29,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
   public readonly accessories: PlatformAccessory[] = [];
   
   // Track active accessory instances
-  private readonly activeAccessories: Map<string, TapoLightAccessory> = new Map();
+  private readonly activeAccessories: Map<string, TapoAccessory> = new Map();
   
   public readonly config: TapoPlatformConfig;
   public credentials: TapoCredentials;
@@ -35,6 +37,7 @@ export class TapoPlatform implements DynamicPlatformPlugin {
   private secretRequestService?: SecretRequestService;
   private credentialsReady = false;
   private pendingAccessories: Array<{ accessory: PlatformAccessory; config: TapoDeviceConfig }> = [];
+  private pendingIrConfigs: TapoDeviceConfig[] = [];
 
   constructor(
     public readonly log: Logger,
@@ -168,11 +171,19 @@ export class TapoPlatform implements DynamicPlatformPlugin {
    */
   discoverDevices() {
     const configuredDevices = new Set<string>();
+    const irConfigs: TapoDeviceConfig[] = [];
 
     // Register each device from config
     for (const deviceConfig of this.config.devices) {
+      // IR remotes are cloud sub-things (no LAN access) — handle them separately
+      if (normalizeDeviceType(deviceConfig.type) === 'ir-remote') {
+        configuredDevices.add(this.api.hap.uuid.generate(this.deviceId(deviceConfig)));
+        irConfigs.push(deviceConfig);
+        continue;
+      }
+
       // Generate a unique id for the accessory
-      const uuid = this.api.hap.uuid.generate(deviceConfig.ip);
+      const uuid = this.api.hap.uuid.generate(this.deviceId(deviceConfig));
       configuredDevices.add(uuid);
 
       // Check if accessory already exists
@@ -225,6 +236,19 @@ export class TapoPlatform implements DynamicPlatformPlugin {
 
       this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, accessoriesToRemove);
     }
+
+    // Kick off cloud-based IR remote discovery for any configured IR remotes
+    if (irConfigs.length > 0) {
+      this.initializeIrRemotes(irConfigs);
+    }
+  }
+
+  /**
+   * Stable identifier for a device config (used for the accessory UUID).
+   * Prefers the cloud thingName, then the local IP, then the display name.
+   */
+  private deviceId(config: TapoDeviceConfig): string {
+    return config.thingName || config.ip || config.name;
   }
 
   /**
@@ -264,16 +288,124 @@ export class TapoPlatform implements DynamicPlatformPlugin {
         this.log.warn(`[${config.name}] Unsupported device type: ${config.type} (normalized: ${normalizedType})`);
     }
   }
+
+  /**
+   * Discover configured IR remotes via the Tapo Cloud Thing API and create
+   * their Television accessories. IR remotes are cloud sub-things of the
+   * H110 hub — they have no local IP, so this is entirely cloud-based.
+   */
+  private async initializeIrRemotes(irConfigs: TapoDeviceConfig[]) {
+    if (irConfigs.length === 0) {
+      return;
+    }
+
+    // Defer until credentials are available (e.g. Secret Request mode)
+    if (!this.credentialsReady) {
+      this.log.info(`[IR Remote] Queuing ${irConfigs.length} IR remote(s) until credentials are available`);
+      this.pendingIrConfigs = irConfigs;
+      return;
+    }
+
+    this.log.info(`[IR Remote] Discovering ${irConfigs.length} IR remote(s) via cloud...`);
+
+    try {
+      // Full cloud chain: login -> service URLs -> JWT -> list things
+      const client = new TapoCloudClient(this.credentials);
+      await client.initialize();
+
+      const remotes = await client.findIrRemotes();
+      if (remotes.length === 0) {
+        this.log.warn('[IR Remote] No IR remotes found on this TP-Link account');
+        return;
+      }
+
+      this.log.info(`[IR Remote] Found ${remotes.length} IR remote(s) on the account`);
+
+      for (const irConfig of irConfigs) {
+        const thing = this.matchIrRemote(irConfig, remotes);
+        if (!thing) {
+          this.log.warn(
+            `[IR Remote] "${irConfig.name}" not found on the account. ` +
+            `Known remotes: ${remotes.map(r => `"${decodeBase64Label(r.nickname)}" (${r.thingName})`).join(', ')}`,
+          );
+          continue;
+        }
+        this.createIrAccessory(irConfig, thing, client);
+      }
+    } catch (error) {
+      this.log.error('[IR Remote] Cloud discovery failed:', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
+   * Match a configured IR remote to a cloud thing by thingName or decoded nickname.
+   */
+  private matchIrRemote(config: TapoDeviceConfig, remotes: TapoThingInfo[]): TapoThingInfo | undefined {
+    if (config.thingName) {
+      return remotes.find((r) => r.thingName === config.thingName);
+    }
+    return remotes.find((r) => decodeBase64Label(r.nickname) === config.name);
+  }
+
+  /**
+   * Create (or restore) the Television accessory for an IR remote.
+   */
+  private createIrAccessory(config: TapoDeviceConfig, thing: TapoThingInfo, client: TapoCloudClient) {
+    const uuid = this.api.hap.uuid.generate(this.deviceId(config));
+    const existingAccessory = this.accessories.find((accessory) => accessory.UUID === uuid);
+
+    if (existingAccessory) {
+      this.log.info(`[${existingAccessory.displayName}] Restoring IR remote from cache`);
+      existingAccessory.context.device = config;
+      existingAccessory.context.thing = thing;
+      this.api.updatePlatformAccessories([existingAccessory]);
+      this.createIrRemoteHandler(existingAccessory, config, thing, client);
+    } else {
+      this.log.info(`[${config.name}] Adding IR remote accessory`);
+      const accessory = new this.api.platformAccessory(config.name, uuid);
+      accessory.context.device = config;
+      accessory.context.thing = thing;
+      this.createIrRemoteHandler(accessory, config, thing, client);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    }
+  }
+
+  /**
+   * Create the IrRemoteAccessory handler instance.
+   */
+  private createIrRemoteHandler(accessory: PlatformAccessory, config: TapoDeviceConfig, thing: TapoThingInfo, client: TapoCloudClient) {
+    // Remove old instance if it exists
+    const oldInstance = this.activeAccessories.get(accessory.UUID);
+    if (oldInstance) {
+      oldInstance.destroy();
+    }
+
+    const irRemote = new IrRemoteAccessory(
+      this,
+      accessory,
+      config,
+      thing,
+      client,
+      this.log,
+    );
+    this.activeAccessories.set(accessory.UUID, irRemote);
+
+    // Fetch keys and build input sources
+    irRemote.initializeDevice().catch((error) => {
+      this.log.error(`[${config.name}] Failed to initialize IR remote:`, error instanceof Error ? error.message : String(error));
+    });
+  }
   
   /**
    * Initialize accessories that were pending credential availability
    */
   private initializePendingAccessories() {
-    if (this.pendingAccessories.length === 0) {
+    const hadPending = this.pendingAccessories.length > 0 || this.pendingIrConfigs.length > 0;
+    if (!hadPending) {
       return;
     }
     
-    this.log.info(`Initializing ${this.pendingAccessories.length} pending device(s)...`);
+    this.log.info(`Initializing ${this.pendingAccessories.length + this.pendingIrConfigs.length} pending device(s)...`);
     
     const pending = [...this.pendingAccessories];
     this.pendingAccessories = [];
@@ -287,6 +419,13 @@ export class TapoPlatform implements DynamicPlatformPlugin {
           this.log.error(`[${config.name}] Failed to initialize:`, err);
         });
       }
+    }
+
+    // Kick off cloud-based IR remote discovery for queued IR remotes
+    if (this.pendingIrConfigs.length > 0) {
+      const irConfigs = [...this.pendingIrConfigs];
+      this.pendingIrConfigs = [];
+      this.initializeIrRemotes(irConfigs);
     }
     
     this.log.info('All devices initialized successfully!');

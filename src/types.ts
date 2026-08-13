@@ -22,10 +22,26 @@ export interface TapoPlatformConfig {
 
 export interface TapoDeviceConfig {
   name: string;
-  ip: string;
-  type: 'light';
+  /**
+   * Local IP address. Required for LAN devices (`light`), not needed for
+   * cloud-controlled IR remotes (`ir-remote`).
+   */
+  ip?: string;
+  type: 'light' | 'ir-remote';
   mac?: string;
   model?: string;
+  /**
+   * IR remote only: the cloud `thingName` of the IR remote sub-thing
+   * (e.g. `802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002`).
+   * When omitted, the remote is matched by its decoded nickname.
+   */
+  thingName?: string;
+  /**
+   * IR remote only: optional list of IR key `name`s (e.g. `['POWER','VOL+']`)
+   * to expose as HomeKit input sources. When omitted, all keys reported by the
+   * remote are exposed.
+   */
+  irKeys?: string[];
 }
 
 export interface TapoDeviceInfo {
@@ -97,4 +113,71 @@ export interface SecretRequestStatus {
   timeoutSeconds?: number;
   errorMessage?: string;
   requestId?: string;
+}
+
+// ── Cloud Thing API (v2) types ─────────────────────────────────────────
+
+/**
+ * A device/thing from the Tapo cloud `/v2/things` listing.
+ * IR remotes appear as `category === 'ir.remote'` sub-things of the H110 hub.
+ */
+export interface TapoThingInfo {
+  thingName: string;
+  category: string;
+  model?: string;
+  /** Base64-encoded nickname (decode with decodeBase64Label) */
+  nickname?: string;
+  isSubThing?: boolean;
+  status?: number;
+  mac?: string;
+  deviceId?: string;
+  /** Region-specific app server for this thing (e.g. euw1-app-server...) */
+  appServerUrlV2?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * An IR key as reported by `getKeyListInfo`.
+ * `name` is what you send to `sendIrCmdById`; `display_name` is base64.
+ */
+export interface TapoIrKey {
+  name: string;
+  id: number;
+  pwm?: number;
+  display_name?: string;
+  ac_status?: string;
+}
+
+/**
+ * Service URLs resolved from `getAppServiceUrlByCloudUserName`
+ */
+export interface TapoCloudServiceUrls {
+  appServer: string;
+  cloudGateway?: string;
+  security: string;
+}
+
+/**
+ * Response shape for a services-sync passthrough call.
+ * This is the `outputParams.responseData` payload:
+ * `{ result: { responses: [ { method, error_code, result } ] } }`
+ */
+export interface TapoPassthroughResponse {
+  requestId?: string;
+  result?: {
+    responses?: Array<{
+      method?: string;
+      error_code?: number;
+      result?: Record<string, unknown>;
+    }>;
+  };
+}
+
+/**
+ * Common interface for accessory handlers managed by the platform.
+ * Both TapoLightAccessory and IrRemoteAccessory implement this.
+ */
+export interface TapoAccessory {
+  destroy(): void;
+  initializeDevice(): Promise<void>;
 }

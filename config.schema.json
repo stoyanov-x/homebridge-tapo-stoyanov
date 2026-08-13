@@ -78,13 +78,12 @@
               "title": "Device Name",
               "type": "string",
               "required": true,
-              "description": "Friendly name for the device"
+              "description": "Friendly name for the device. For IR Remotes, this must match the remote's nickname in the Tapo app (or set the thingName below)."
             },
             "ip": {
               "title": "IP Address",
               "type": "string",
-              "required": true,
-              "description": "Local IP address of the device"
+              "description": "Local IP address of the device. Required for Light Bulbs; not needed for IR Remotes (they are controlled via the cloud)."
             },
             "type": {
               "title": "Device Type",
@@ -92,9 +91,23 @@
               "required": true,
               "default": "light",
               "oneOf": [
-                { "title": "Light Bulb", "enum": ["light"] }
+                { "title": "Light Bulb", "enum": ["light"] },
+                { "title": "IR Remote (H110 Hub)", "enum": ["ir-remote"] }
               ],
-              "description": "Type of Tapo device"
+              "description": "Type of Tapo device. IR Remote exposes a paired IR remote (e.g. a TV or speaker) from the Tapo H110 hub as a HomeKit Television."
+            },
+            "thingName": {
+              "title": "IR Remote Thing Name (Optional)",
+              "type": "string",
+              "description": "IR Remote only: the cloud thingName of the IR remote (e.g. '802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002'). When omitted, the remote is matched by its decoded nickname. You can find the thingName from the plugin logs after discovery."
+            },
+            "irKeys": {
+              "title": "Exposed IR Keys (Optional)",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "IR Remote only: optional list of IR key names to expose as HomeKit inputs (e.g. ['POWER', 'VOL+', 'VOL-', 'MUTE']). When omitted, all keys reported by the remote are exposed."
             },
             "mac": {
               "title": "MAC Address",
@@ -106,7 +119,17 @@
               "type": "string",
               "description": "Device model"
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "type": { "const": "light" } }
+              },
+              "then": {
+                "required": ["ip"]
+              }
+            }
+          ]
         }
       },
       "pollingInterval": {

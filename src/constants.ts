@@ -33,3 +33,29 @@ export const NETWORK_SCAN_RANGE = 254; // .1 to .254
 export const NETWORK_SCAN_BATCH_SIZE = 20;
 export const DEVICE_SCAN_TIMEOUT = 2000; // milliseconds
 export const DEVICE_CHECK_TIMEOUT = 3000; // milliseconds
+
+// ── Cloud Thing API (v2) constants ─────────────────────────────────────
+// These are the production access key / secret extracted from the Tapo APK
+// (r40/C67539a.java). They are NOT user secrets — they are the app's public
+// signing credentials, and are what let the plugin authenticate with the
+// TP-Link cloud using only the user's account email/password.
+export const CLOUD_LOGIN_URL = 'https://eu-wap.tplinkcloud.com';
+export const CLOUD_ACCESS_KEY = '4d11b6b9d5ea4d19a829adbb9714b057';
+export const CLOUD_SECRET = '6ed7d97f3e73467f8a5bab90b577ba4c';
+export const CLOUD_APP_NAME = 'Tapo_Android';
+export const CLOUD_APP_VERSION = '3.19.607';
+export const CLOUD_APP_OSPF = 'Android';
+export const CLOUD_APP_BRAND = 'TPLINK';
+export const CLOUD_SERVICE_IDS = [
+  'nbu.iot-app-server.app-v2',
+  'nbu.iot-cloud-gateway.app-v2',
+  'nbu.iot-security.appdevice-v2',
+];
+export const CLOUD_REQUEST_TIMEOUT = 20000; // milliseconds
+
+// ── IR remote (H110 hub) defaults ──────────────────────────────────────
+export const IR_DEVICE_MODEL = 'H110'; // hub model, used when the remote has no model
+export const IR_KEY_POWER = 'POWER';
+export const IR_KEY_MUTE = 'MUTE';
+export const IR_KEY_VOLUME_UP = 'VOL+';
+export const IR_KEY_VOLUME_DOWN = 'VOL-';
