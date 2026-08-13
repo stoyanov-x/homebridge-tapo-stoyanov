@@ -95,13 +95,21 @@ If you prefer to edit the config file directly, add this to your Homebridge `con
           "type": "ir-remote",
           "thingName": "802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002",
           "irKeys": ["LINE1", "LINE2", "Bluetooth", "OPT", "Coax", "Classic", "DYNAMIC", "VOCAL", "MONITOR"],
-          "irButtons": ["PLAY", "PAUSE", "NEXT", "PREVIOUS"],
           "irLabels": {
+            "POWER": "Power",
+            "VOL+": "Volume Up",
+            "VOL-": "Volume Down",
+            "MUTE": "Mute",
+            "PLAY": "Play",
+            "PAUSE": "Pause",
+            "NEXT": "Next",
+            "PREVIOUS": "Previous",
             "LINE1": "Line 1",
             "LINE2": "Line 2",
             "Bluetooth": "Bluetooth",
             "OPT": "Optical",
             "Coax": "Coaxial",
+            "Classic": "Classic",
             "DYNAMIC": "Dynamic",
             "VOCAL": "Vocal",
             "MONITOR": "Monitor"
@@ -139,7 +147,7 @@ Tapo Cloud Thing API — no `ip` or device password is needed.
 | `type` | Yes | `"ir-remote"` |
 | `thingName` | No | The remote's cloud thingName (printed in the plugin log during discovery). Use it to disambiguate when you have multiple remotes with similar names |
 | `irKeys` | No | Optional list of IR **source** key names to expose as HomeKit inputs (e.g. `LINE1`, `LINE2`, `Bluetooth`, `OPT`, `Coax`). Omit to expose all source keys the remote reports. Power/volume/mute/transport keys are never inputs |
-| `irButtons` | No | Optional list of IR transport key names to expose as **Switch buttons** (tap to fire), e.g. `["PLAY","PAUSE","NEXT","PREVIOUS"]`. Omit to default to the transport set. Mute is not a button — it lives on the speaker's mute control |
+| `irButtons` | No | Optional list of IR key names to expose as **Switch buttons** (tap to fire), e.g. `["VOL+","VOL-","PLAY","PAUSE"]`. Disabled by default. Warning: enabling them makes Home app switch from the native TV input/speaker UI to a generic tile layout. Mute is not a button — it lives on the speaker's mute control |
 | `irLabels` | No | Optional display-name overrides keyed by IR key name, e.g. `{ "OPT": "Optical", "LINE1": "Line 1" }`. Without this, labels are auto-cased (`LINE1` → `Line 1`, `BLUETOOTH` → `Bluetooth`) |
 
 To find your remote's `thingName`, enable debug logging and look for the
@@ -148,9 +156,9 @@ with its `thingName`.
 
 **HomeKit mapping:**
 - TV power (Active) → `POWER` key
-- Volume + **mute** (TelevisionSpeaker) → `VOL+` / `VOL-` / `MUTE` (use the speaker's volume popup in the Home app)
+- Volume + **mute** (TelevisionSpeaker) → `VOL+` / `VOL-` / `MUTE` via the speaker's volume slider on the TV page
 - **Source keys** (Line 1, Line 2, Bluetooth, OPT, ...) become **Input Sources**; selecting one in the Home app fires its IR command
-- **Transport keys** (Play, Pause, Next, Previous) become **Switch buttons** on the accessory — tap to fire
+- **Buttons** are disabled by default to preserve the native TV layout. If you set `irButtons`, those keys become **Switch buttons** on the accessory — tap to fire, but Home app will switch to a generic tile layout
 - Navigation keys are not exposed (no HomeKit home for them)
 
 > **After updating the plugin**, remove the accessory from the Home app and

@@ -35,6 +35,9 @@ import {
 import { decodeBase64Label, smartCaseLabel, isOpaqueKeyName } from './utils';
 
 export class IrRemoteAccessory {
+  private static readonly DISPLAY_ORDER_ELEMENT_START = 0x01;
+  private static readonly DISPLAY_ORDER_ELEMENT_END = 0x00;
+
   private readonly thing: TapoThingInfo;
   private readonly client: TapoCloudClient;
   private readonly television: Service;
@@ -91,7 +94,11 @@ export class IrRemoteAccessory {
       || this.accessory.addService(this.platform.Service.TelevisionSpeaker);
 
     this.speaker.setCharacteristic(this.platform.Characteristic.Name, config.name);
-    this.speaker.setCharacteristic(this.platform.Characteristic.VolumeControlType, 1); // Relative
+    // Explicitly mark the speaker as active and advertise that we support
+    // relative volume *with* a current volume value. Some Home clients render
+    // better speaker controls when both are present.
+    this.speaker.setCharacteristic(this.platform.Characteristic.Active, 1);
+    this.speaker.setCharacteristic(this.platform.Characteristic.VolumeControlType, 2); // Relative with current
 
     // VolumeSelector: 0 = increment (VOL+), 1 = decrement (VOL-)
     this.speaker.getCharacteristic(this.platform.Characteristic.VolumeSelector)
@@ -118,6 +125,7 @@ export class IrRemoteAccessory {
     try {
       const keys = await this.client.listKeys(this.thing);
       this.buildInputSources(keys);
+      this.updateDisplayOrder();
       this.buildButtons(keys);
       // Persist the rebuilt service set (removed + added) to Homebridge storage
       this.platform.api.updatePlatformAccessories([this.accessory]);
@@ -164,10 +172,13 @@ export class IrRemoteAccessory {
     this.keyById.clear();
     this.inputSources.length = 0;
 
-    // Apply the optional key filter from config, then skip non-input keys
+    // Apply the optional key filter from config, preserving the user's order.
+    // When omitted, keep the remote's natural order.
     const filter = this.config.irKeys;
     const selected = filter && filter.length > 0
-      ? keys.filter((key) => filter.includes(key.name))
+      ? filter
+        .map((name) => keys.find((key) => key.name === name))
+        .filter((key): key is TapoIrKey => !!key)
       : keys;
 
     for (const key of selected) {
@@ -200,6 +211,50 @@ export class IrRemoteAccessory {
   }
 
   /**
+   * Set the Television DisplayOrder TLV8 so HomeKit renders inputs in the same
+   * order as `this.inputSources` (which already follows `irKeys` when provided).
+   */
+  private updateDisplayOrder(): void {
+    if (this.inputSources.length === 0) {
+      return;
+    }
+
+    const tlv = this.buildDisplayOrderTLV().toString('base64');
+    this.television.setCharacteristic(this.platform.Characteristic.DisplayOrder, tlv);
+  }
+
+  /**
+   * Encode DisplayOrder as TLV8: each input identifier is a 4-byte little-
+   * endian integer with type 0x01, delimited by 0x00/0x00 between elements.
+   * This matches known-good HomeKit Television implementations.
+   */
+  private buildDisplayOrderTLV(): Buffer {
+    const parts: Buffer[] = [];
+
+    for (let index = 0; index < this.inputSources.length; index++) {
+      if (index > 0) {
+        parts.push(Buffer.from([
+          IrRemoteAccessory.DISPLAY_ORDER_ELEMENT_END,
+          0x00,
+        ]));
+      }
+
+      const identifier = this.inputSources[index]
+        .getCharacteristic(this.platform.Characteristic.Identifier)
+        .value as number;
+      const idBuffer = Buffer.alloc(4);
+      idBuffer.writeUInt32LE(identifier, 0);
+      parts.push(Buffer.from([
+        IrRemoteAccessory.DISPLAY_ORDER_ELEMENT_START,
+        0x04,
+        ...idBuffer,
+      ]));
+    }
+
+    return Buffer.concat(parts);
+  }
+
+  /**
    * Create momentary Switch "buttons" for transport/utility keys (Mute, Play,
    * Pause, Next, Previous). Tapping one fires the IR command and it snaps back
    * to off. The set of keys is configurable via `irButtons` (default transport set).
@@ -212,11 +267,11 @@ export class IrRemoteAccessory {
       ? this.config.irButtons
       : IR_BUTTON_KEYS;
 
-    for (const key of keys) {
-      // Only keys the user asked for (or the default transport set)
-      if (!wanted.includes(key.name)) {
-        continue;
-      }
+    const selected = wanted
+      .map((name) => keys.find((key) => key.name === name))
+      .filter((key): key is TapoIrKey => !!key);
+
+    for (const key of selected) {
       // POWER is the TV toggle; inputs are already exposed as inputs
       if (key.name === IR_KEY_POWER || this.keyById.has(key.id)) {
         continue;
@@ -305,6 +360,7 @@ export class IrRemoteAccessory {
       return;
     }
     this.state.active = on;
+    this.speaker.updateCharacteristic(this.platform.Characteristic.Active, on ? 1 : 0);
     // No active input while the TV is off
     if (!on && this.state.activeIdentifier !== 0) {
       this.state.activeIdentifier = 0;

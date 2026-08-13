@@ -115,7 +115,7 @@
               "items": {
                 "type": "string"
               },
-              "description": "IR Remote only: optional list of IR key names to expose as HomeKit Switch buttons (tap to fire), e.g. ['MUTE', 'PLAY', 'PAUSE', 'NEXT', 'PREVIOUS']. When omitted, defaults to MUTE/PLAY/PAUSE/NEXT/PREVIOUS."
+              "description": "IR Remote only: optional list of IR key names to expose as HomeKit Switch buttons (tap to fire), e.g. ['VOL+', 'VOL-', 'PLAY', 'PAUSE']. Disabled by default. Warning: enabling Switch buttons makes iOS/Home show a generic tile layout instead of the native Television input picker + speaker controls."
             },
             "irLabels": {
               "title": "IR Label Overrides (Optional)",

@@ -76,18 +76,14 @@ export const IR_CONTROL_KEYS = [
 ];
 
 /**
- * IR keys exposed as HomeKit Switch "buttons" (tap to fire). These are
- * transport controls (Play, Pause, Next, Previous) that have no native
- * control on a HomeKit Television, so they become momentary switches on the
- * accessory. Mute is NOT here — it lives on the TelevisionSpeaker's native
- * Mute characteristic. Override per-remote with the `irButtons` config option.
+ * IR keys exposed as HomeKit Switch "buttons" (tap to fire).
+ *
+ * Disabled by default. Adding Switch services to the same accessory causes
+ * iOS/Home to fall back to a generic multi-tile layout, which hides the native
+ * Television input picker and speaker controls. Users can still opt in via the
+ * `irButtons` config option if they prefer explicit tappable tiles.
  */
-export const IR_BUTTON_KEYS = [
-  'PLAY',
-  'PAUSE',
-  'PREVIOUS',
-  'NEXT',
-];
+export const IR_BUTTON_KEYS: string[] = [];
 
 /**
  * IR keys whose decoded display name marks them as navigation/menu buttons
