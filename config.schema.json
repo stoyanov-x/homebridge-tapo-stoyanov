@@ -102,12 +102,28 @@
               "description": "IR Remote only: the cloud thingName of the IR remote (e.g. '802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002'). When omitted, the remote is matched by its decoded nickname. You can find the thingName from the plugin logs after discovery."
             },
             "irKeys": {
-              "title": "Exposed IR Keys (Optional)",
+              "title": "Exposed IR Source Keys (Optional)",
               "type": "array",
               "items": {
                 "type": "string"
               },
-              "description": "IR Remote only: optional list of IR key names to expose as HomeKit inputs (e.g. ['POWER', 'VOL+', 'VOL-', 'MUTE']). When omitted, all keys reported by the remote are exposed."
+              "description": "IR Remote only: optional list of IR SOURCE key names to expose as HomeKit inputs (e.g. ['LINE1', 'LINE2', 'Bluetooth', 'OPT']). When omitted, all source keys reported by the remote are exposed. Power/volume/mute/transport keys are never inputs."
+            },
+            "irButtons": {
+              "title": "IR Buttons (Optional)",
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "IR Remote only: optional list of IR key names to expose as HomeKit Switch buttons (tap to fire), e.g. ['MUTE', 'PLAY', 'PAUSE', 'NEXT', 'PREVIOUS']. When omitted, defaults to MUTE/PLAY/PAUSE/NEXT/PREVIOUS."
+            },
+            "irLabels": {
+              "title": "IR Label Overrides (Optional)",
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "IR Remote only: display-name overrides keyed by IR key name (e.g. { 'OPT': 'Optical', 'LINE1': 'Line 1' }). Without this, labels are auto-cased from the remote's own names (LINE1 -> Line 1)."
             },
             "mac": {
               "title": "MAC Address",

@@ -94,7 +94,18 @@ If you prefer to edit the config file directly, add this to your Homebridge `con
           "name": "Edifier S2000 Mark III",
           "type": "ir-remote",
           "thingName": "802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002",
-          "irKeys": ["POWER", "VOL+", "VOL-", "MUTE"]
+          "irKeys": ["LINE1", "LINE2", "Bluetooth", "OPT", "Coax", "Classic", "DYNAMIC", "VOCAL", "MONITOR"],
+          "irButtons": ["PLAY", "PAUSE", "NEXT", "PREVIOUS"],
+          "irLabels": {
+            "LINE1": "Line 1",
+            "LINE2": "Line 2",
+            "Bluetooth": "Bluetooth",
+            "OPT": "Optical",
+            "Coax": "Coaxial",
+            "DYNAMIC": "Dynamic",
+            "VOCAL": "Vocal",
+            "MONITOR": "Monitor"
+          }
         }
       ]
     }
@@ -127,7 +138,9 @@ Tapo Cloud Thing API — no `ip` or device password is needed.
 | `name` | Yes | Must match the remote's nickname in the Tapo app (e.g. "Edifier S2000 Mark III") |
 | `type` | Yes | `"ir-remote"` |
 | `thingName` | No | The remote's cloud thingName (printed in the plugin log during discovery). Use it to disambiguate when you have multiple remotes with similar names |
-| `irKeys` | No | Optional list of IR key names to expose as HomeKit inputs. Omit to expose all keys the remote reports |
+| `irKeys` | No | Optional list of IR **source** key names to expose as HomeKit inputs (e.g. `LINE1`, `LINE2`, `Bluetooth`, `OPT`, `Coax`). Omit to expose all source keys the remote reports. Power/volume/mute/transport keys are never inputs |
+| `irButtons` | No | Optional list of IR transport key names to expose as **Switch buttons** (tap to fire), e.g. `["PLAY","PAUSE","NEXT","PREVIOUS"]`. Omit to default to the transport set. Mute is not a button — it lives on the speaker's mute control |
+| `irLabels` | No | Optional display-name overrides keyed by IR key name, e.g. `{ "OPT": "Optical", "LINE1": "Line 1" }`. Without this, labels are auto-cased (`LINE1` → `Line 1`, `BLUETOOTH` → `Bluetooth`) |
 
 To find your remote's `thingName`, enable debug logging and look for the
 `[IR Remote]` lines on startup — they list every remote found on the account
@@ -135,8 +148,14 @@ with its `thingName`.
 
 **HomeKit mapping:**
 - TV power (Active) → `POWER` key
-- Volume up/down + mute (TelevisionSpeaker) → `VOL+` / `VOL-` / `MUTE` keys
-- Each other key becomes an **Input Source**; selecting it in the Home app fires the IR command
+- Volume + **mute** (TelevisionSpeaker) → `VOL+` / `VOL-` / `MUTE` (use the speaker's volume popup in the Home app)
+- **Source keys** (Line 1, Line 2, Bluetooth, OPT, ...) become **Input Sources**; selecting one in the Home app fires its IR command
+- **Transport keys** (Play, Pause, Next, Previous) become **Switch buttons** on the accessory — tap to fire
+- Navigation keys are not exposed (no HomeKit home for them)
+
+> **After updating the plugin**, remove the accessory from the Home app and
+> re-add it — the set of services changed, and HomeKit won't pick up removed
+> inputs from an already-paired accessory.
 
 ### Secret Request Mode (Advanced)
 

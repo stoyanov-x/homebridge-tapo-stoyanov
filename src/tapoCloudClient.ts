@@ -304,8 +304,12 @@ export class TapoCloudClient {
   /**
    * Step 5: send a single request to a thing through the passthrough service.
    * Uses the thing's own region app server when available.
+   *
+   * If the request fails with an auth error (expired login token / rejected
+   * signature), the client re-authenticates and retries once — so a long-running
+   * Homebridge stays working past token expiry without a restart.
    */
-  private async passthrough(thing: TapoThingInfo, innerRequest: Record<string, unknown>): Promise<TapoPassthroughResponse> {
+  private async passthrough(thing: TapoThingInfo, innerRequest: Record<string, unknown>, retried = false): Promise<TapoPassthroughResponse> {
     const server = thing.appServerUrlV2 || this.appServer;
     const body = {
       serviceId: 'passthrough',
@@ -317,9 +321,18 @@ export class TapoCloudClient {
       },
     };
 
-    const res = await this.http.post(`${server}/v1/things/${thing.thingName}/services-sync`, body, {
-      headers: this.thingHeaders(),
-    });
+    let res;
+    try {
+      res = await this.http.post(`${server}/v1/things/${thing.thingName}/services-sync`, body, {
+        headers: this.thingHeaders(),
+      });
+    } catch (error) {
+      if (!retried && this.isAuthError(error)) {
+        await this.reauthenticate();
+        return this.passthrough(thing, innerRequest, true);
+      }
+      throw error;
+    }
 
     // The services-sync envelope wraps the payload in outputParams.responseData
     const raw = res.data as {
@@ -329,12 +342,49 @@ export class TapoCloudClient {
     };
     const responseData = raw.outputParams?.responseData;
     if (raw.error_code !== undefined && raw.error_code !== 0) {
-      throw new TapoCloudError(`Passthrough failed: error_code ${raw.error_code}`, { errorCode: raw.error_code });
+      const err = new TapoCloudError(`Passthrough failed: error_code ${raw.error_code}`, { errorCode: raw.error_code });
+      if (!retried && this.isAuthError(err)) {
+        await this.reauthenticate();
+        return this.passthrough(thing, innerRequest, true);
+      }
+      throw err;
     }
     if (!responseData) {
       throw new TapoCloudError('Passthrough returned no responseData');
     }
     return responseData;
+  }
+
+  /**
+   * Heuristic for whether a failure is an auth problem (expired token,
+   * rejected signature/access key, 401/403) — the only cases worth a retry.
+   */
+  private isAuthError(error: unknown): boolean {
+    if (error instanceof TapoCloudError) {
+      // -10301 signature rejected, -10304 invalid access key
+      if (error.errorCode === -10301 || error.errorCode === -10304) {
+        return true;
+      }
+      if (error.status === 401 || error.status === 403) {
+        return true;
+      }
+    }
+    // Axios HTTP errors carry response.status
+    const withStatus = error as { response?: { status?: number } };
+    if (withStatus?.response?.status === 401 || withStatus?.response?.status === 403) {
+      return true;
+    }
+    const msg = error instanceof Error ? error.message : String(error);
+    return /token|signature|unauthor|access key|login/i.test(msg);
+  }
+
+  /**
+   * Refresh the auth chain after an expired token / rejected signature.
+   */
+  private async reauthenticate(): Promise<void> {
+    // eslint-disable-next-line no-console
+    console.warn('[TapoCloud] Re-authenticating after auth failure...');
+    await this.initialize();
   }
 
   /**

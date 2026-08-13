@@ -59,3 +59,38 @@ export const IR_KEY_POWER = 'POWER';
 export const IR_KEY_MUTE = 'MUTE';
 export const IR_KEY_VOLUME_UP = 'VOL+';
 export const IR_KEY_VOLUME_DOWN = 'VOL-';
+
+/**
+ * IR keys that are NOT input sources — they map to TV/speaker controls
+ * (power → Active, volume → VolumeSelector, mute → Mute) or are transport
+ * buttons with no HomeKit home on the Television grid. Never exposed as inputs.
+ */
+export const IR_CONTROL_KEYS = [
+  IR_KEY_VOLUME_UP,
+  IR_KEY_VOLUME_DOWN,
+  IR_KEY_MUTE,
+  'PLAY',
+  'PAUSE',
+  'PREVIOUS',
+  'NEXT',
+];
+
+/**
+ * IR keys exposed as HomeKit Switch "buttons" (tap to fire). These are
+ * transport controls (Play, Pause, Next, Previous) that have no native
+ * control on a HomeKit Television, so they become momentary switches on the
+ * accessory. Mute is NOT here — it lives on the TelevisionSpeaker's native
+ * Mute characteristic. Override per-remote with the `irButtons` config option.
+ */
+export const IR_BUTTON_KEYS = [
+  'PLAY',
+  'PAUSE',
+  'PREVIOUS',
+  'NEXT',
+];
+
+/**
+ * IR keys whose decoded display name marks them as navigation/menu buttons
+ * (not inputs). Matched case-insensitively against the decoded display name.
+ */
+export const IR_NAV_KEYS = ['MENU', 'UP', 'DOWN', 'LEFT', 'RIGHT', 'OK', '']; 

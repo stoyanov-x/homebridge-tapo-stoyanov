@@ -29,9 +29,29 @@
           "_comment": "=== IR REMOTE (Tapo H110 hub) ===",
           "name": "Edifier S2000 Mark III",
           "type": "ir-remote",
-          "_comment2": "name must match the remote's nickname in the Tapo app. thingName is optional (used to disambiguate multiple remotes). irKeys is optional (defaults to all keys).",
+          "_comment2": "name must match the remote's nickname in the Tapo app. thingName is optional. irKeys = which SOURCE keys become HomeKit inputs (omit = all sources, incl. EQ modes). irButtons = which transport keys become tappable Switch buttons (default PLAY/PAUSE/NEXT/PREVIOUS; Mute lives on the speaker's mute control). irLabels = explicit display-name overrides for ANY key — power, volume, mute, buttons and inputs (auto-case already gives MUTE -> 'Mute', PLAY -> 'Play', LINE1 -> 'Line 1'; only acronyms like OPT/Coax need spelling out, but everything is listed here for clarity).",
           "thingName": "802D3E1478A92CEA8BF45E3034FE94D9237E02B7030B0002",
-          "irKeys": ["POWER", "VOL+", "VOL-", "MUTE"]
+          "irKeys": ["LINE1", "LINE2", "Bluetooth", "OPT", "Coax", "Classic", "DYNAMIC", "VOCAL", "MONITOR"],
+          "irButtons": ["PLAY", "PAUSE", "NEXT", "PREVIOUS"],
+          "irLabels": {
+            "POWER": "Power",
+            "VOL+": "Volume Up",
+            "VOL-": "Volume Down",
+            "MUTE": "Mute",
+            "PLAY": "Play",
+            "PAUSE": "Pause",
+            "NEXT": "Next",
+            "PREVIOUS": "Previous",
+            "LINE1": "Line 1",
+            "LINE2": "Line 2",
+            "Bluetooth": "Bluetooth",
+            "OPT": "Optical",
+            "Coax": "Coaxial",
+            "Classic": "Classic",
+            "DYNAMIC": "Dynamic",
+            "VOCAL": "Vocal",
+            "MONITOR": "Monitor"
+          }
         }
       ],
       "_bridge": {

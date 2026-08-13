@@ -42,6 +42,18 @@ export interface TapoDeviceConfig {
    * remote are exposed.
    */
   irKeys?: string[];
+  /**
+   * IR remote only: optional display-name overrides, keyed by IR key name
+   * (e.g. `{ 'OPT': 'Optical', 'LINE1': 'Line 1' }`). Without this, labels are
+   * auto-cased from the remote's own names (LINE1 -> Line 1).
+   */
+  irLabels?: Record<string, string>;
+  /**
+   * IR remote only: optional list of IR key `name`s to expose as HomeKit
+   * Switch buttons (tap to fire), e.g. `['MUTE','PLAY','PAUSE','NEXT','PREVIOUS']`.
+   * When omitted, defaults to the transport set (MUTE/PLAY/PAUSE/NEXT/PREVIOUS).
+   */
+  irButtons?: string[];
 }
 
 export interface TapoDeviceInfo {

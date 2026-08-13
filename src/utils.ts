@@ -58,7 +58,8 @@ export function normalizeDeviceType(cloudType: string | undefined): string {
 
 /**
  * Decode a base64-encoded label from the Tapo cloud (nicknames, IR display names).
- * Returns the decoded string, or the raw input if it isn't valid base64 text.
+ * The cloud zero-pads these fields to 4 bytes ("OPT\0"), so NUL bytes are
+ * stripped. Returns the decoded string, or the raw input if it isn't readable text.
  */
 export function decodeBase64Label(label: string | undefined): string {
   if (!label) {
@@ -66,17 +67,43 @@ export function decodeBase64Label(label: string | undefined): string {
   }
   
   try {
-    // The cloud stores labels as base64 of UTF-8 bytes
-    const decoded = Buffer.from(label, 'base64').toString('utf8');
+    // The cloud stores labels as base64 of UTF-8 bytes, zero-padded to 4 bytes
+    const decoded = Buffer.from(label, 'base64').toString('utf8').replace(/\0/g, '').trim();
     // Only use the result if it looks like readable text (not binary garbage)
     if (decoded && /^[\x20-\x7E\u00A0-\u024F\u2010-\u2027]*$/.test(decoded)) {
-      return decoded.trim();
+      return decoded;
     }
   } catch {
     // fall through to returning the raw label
   }
   
   return label;
+}
+
+/**
+ * Whether an IR key `name` is an opaque machine-generated id (e.g. "7zzAj5Sz")
+ * rather than a human-readable label ("LINE1", "Bluetooth", "Coax").
+ * Opaque names contain digits plus mixed case.
+ */
+export function isOpaqueKeyName(name: string): boolean {
+  return /\d/.test(name) && /[a-z]/.test(name) && /[A-Z]/.test(name);
+}
+
+/**
+ * Convert an ALL-CAPS IR label to Apple-style title casing.
+ * "LINE1" -> "Line 1", "BLUETOOTH" -> "Bluetooth", "VOL+" -> "Vol+".
+ * Names that already contain lowercase letters are returned unchanged.
+ */
+export function smartCaseLabel(label: string): string {
+  if (!label || /[a-z]/.test(label)) {
+    return label;
+  }
+  // Split letter→digit boundaries so "LINE1" becomes "Line 1"
+  const spaced = label.replace(/([A-Za-z]+)(\d+)/g, '$1 $2');
+  return spaced
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 /**
