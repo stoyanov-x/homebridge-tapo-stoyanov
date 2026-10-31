@@ -34,6 +34,20 @@ import {
 } from './constants';
 import { decodeBase64Label, smartCaseLabel, isOpaqueKeyName } from './utils';
 
+/**
+ * Optimistic state for a fire-and-forget IR device. Persisted in the accessory
+ * context so a Homebridge restart doesn't reset the TV/speaker to a wrong
+ * baseline — the physical device reports nothing back, and POWER is a plain
+ * toggle, so a wrong baseline turns "on" into "off".
+ */
+interface IrOptimisticState {
+  active: boolean;
+  muted: boolean;
+  volume: number;
+  activeIdentifier: number;
+  mediaState: number;
+}
+
 export class IrRemoteAccessory {
   private static readonly DISPLAY_ORDER_ELEMENT_START = 0x01;
   private static readonly DISPLAY_ORDER_ELEMENT_END = 0x00;
@@ -52,8 +66,16 @@ export class IrRemoteAccessory {
   private readonly keyByName = new Map<string, TapoIrKey>();
   private readonly keyByDisplay = new Map<string, TapoIrKey>();
 
+  // IR sends are serialized through this chain so commands leave the hub in
+  // the same order HomeKit wrote them (concurrent cloud calls could otherwise
+  // reorder a VOL- against a POWER).
+  private sendChain: Promise<void> = Promise.resolve();
+  private persistTimer?: NodeJS.Timeout;
+  private traceSeq = 0;
+  private lastTraceAt = 0;
+
   // Optimistic state (IR is fire-and-forget; we can't query the physical device)
-  private state = {
+  private state: IrOptimisticState = {
     active: false,
     muted: false,
     volume: 50, // 0-100, tracked optimistically for the Home app volume slider
@@ -71,6 +93,7 @@ export class IrRemoteAccessory {
   ) {
     this.thing = thing;
     this.client = client;
+    this.restoreState();
 
     // ── Accessory information ──────────────────────────────────────────
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
@@ -123,9 +146,12 @@ export class IrRemoteAccessory {
     this.speaker.getCharacteristic(this.platform.Characteristic.VolumeSelector)
       .onSet(this.setVolumeSelector.bind(this));
 
-    // Volume is get-only (no absolute IR volume) — tracks optimistically
+    // Volume has no absolute IR equivalent — it tracks optimistically and is
+    // only moved by the relative VolumeSelector above. A write here is logged
+    // (and ignored) so an unexpected client behaviour shows up in the trace.
     this.speaker.getCharacteristic(this.platform.Characteristic.Volume)
-      .onGet(() => this.state.volume);
+      .onGet(() => this.state.volume)
+      .onSet(this.setVolume.bind(this));
 
     // Mute fires the MUTE IR key
     this.speaker.getCharacteristic(this.platform.Characteristic.Mute)
@@ -134,6 +160,57 @@ export class IrRemoteAccessory {
 
     // Link the speaker to the television
     this.television.addLinkedService(this.speaker);
+  }
+
+  // ── Tracing + persisted state ─────────────────────────────────────────
+
+  /**
+   * One always-on line per HomeKit write and per IR send, tagged with a
+   * sequence number and the milliseconds since the previous line. That delta
+   * is the whole point: it shows whether a stray POWER came from a Home app
+   * press or arrived on its own a few hundred ms after a volume press.
+   */
+  private trace(message: string): void {
+    const now = Date.now();
+    const delta = this.lastTraceAt ? ` +${now - this.lastTraceAt}ms` : '';
+    this.lastTraceAt = now;
+    this.traceSeq += 1;
+    this.log.info(`[${this.config.name}] ir#${this.traceSeq}${delta} ${message}`);
+  }
+
+  /** Restore the optimistic state persisted in the accessory context. */
+  private restoreState(): void {
+    const saved = this.accessory.context.irState as Partial<IrOptimisticState> | undefined;
+    if (!saved || typeof saved !== 'object') {
+      return;
+    }
+    if (typeof saved.active === 'boolean') {
+      this.state.active = saved.active;
+    }
+    if (typeof saved.muted === 'boolean') {
+      this.state.muted = saved.muted;
+    }
+    if (typeof saved.volume === 'number') {
+      this.state.volume = Math.min(100, Math.max(0, saved.volume));
+    }
+    if (typeof saved.activeIdentifier === 'number') {
+      this.state.activeIdentifier = saved.activeIdentifier;
+    }
+    if (typeof saved.mediaState === 'number') {
+      this.state.mediaState = saved.mediaState;
+    }
+  }
+
+  /** Persist the optimistic state (debounced — volume ticks arrive in bursts). */
+  private schedulePersist(): void {
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+    }
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      this.accessory.context.irState = { ...this.state };
+      this.platform.api.updatePlatformAccessories([this.accessory]);
+    }, 3000);
   }
 
   /**
@@ -338,8 +415,7 @@ export class IrRemoteAccessory {
       if (!(value as boolean)) {
         return; // only react to ON presses
       }
-      const label = this.labelFor(key);
-      this.log.info(`[${this.config.name}] Button: ${label}`);
+      this.trace(`Button pressed: ${this.labelFor(key)}`);
       try {
         await this.fire(key.name);
       } finally {
@@ -406,10 +482,10 @@ export class IrRemoteAccessory {
    */
   private async fireKey(key: TapoIrKey | undefined, context: string): Promise<void> {
     if (!key) {
-      this.log.debug(`[${this.config.name}] No IR key mapped for ${context}`);
+      this.trace(`${context}: no IR key mapped — nothing sent`);
       return;
     }
-    this.log.info(`[${this.config.name}] ${context}: ${this.labelFor(key)}`);
+    this.trace(`${context}: resolved to key "${key.name}"`);
     await this.fire(key.name);
   }
 
@@ -421,17 +497,19 @@ export class IrRemoteAccessory {
    */
   async setActive(value: CharacteristicValue) {
     const on = value as boolean;
+    this.trace(`HomeKit Active <- ${on ? '1 (on)' : '0 (off)'}, was ${this.state.active ? '1' : '0'}`);
     if (on === this.state.active) {
+      this.trace('Active unchanged — POWER not sent');
       return;
     }
     this.state.active = on;
+    this.schedulePersist();
     this.speaker.updateCharacteristic(this.platform.Characteristic.Active, on ? 1 : 0);
     // No active input while the TV is off
     if (!on && this.state.activeIdentifier !== 0) {
       this.state.activeIdentifier = 0;
       this.television.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, 0);
     }
-    this.log.info(`[${this.config.name}] Power ${on ? 'ON' : 'OFF'}`);
     await this.fire(IR_KEY_POWER);
   }
 
@@ -440,16 +518,19 @@ export class IrRemoteAccessory {
    */
   async setActiveIdentifier(value: CharacteristicValue) {
     const id = value as number;
+    this.trace(`HomeKit ActiveIdentifier <- ${id}, was ${this.state.activeIdentifier}`);
     if (id === this.state.activeIdentifier) {
+      this.trace('ActiveIdentifier unchanged — nothing sent');
       return;
     }
     this.state.activeIdentifier = id;
+    this.schedulePersist();
 
     const key = this.keyById.get(id);
     if (!key) {
+      this.trace(`ActiveIdentifier ${id} has no IR key — nothing sent`);
       return;
     }
-    this.log.info(`[${this.config.name}] Select input: ${this.labelFor(key)}`);
     await this.fire(key.name);
   }
 
@@ -458,6 +539,7 @@ export class IrRemoteAccessory {
    */
   async setRemoteKey(value: CharacteristicValue) {
     const remoteKey = value as number;
+    this.trace(`HomeKit RemoteKey <- ${remoteKey}`);
 
     switch (remoteKey) {
       case 2: // NEXT_TRACK
@@ -489,8 +571,17 @@ export class IrRemoteAccessory {
         await this.togglePlayPause('Remote play/pause');
         return;
       default:
-        this.log.debug(`[${this.config.name}] Unhandled RemoteKey: ${remoteKey}`);
+        this.trace(`RemoteKey ${remoteKey} is unhandled — nothing sent`);
     }
+  }
+
+  /**
+   * Absolute volume writes are not supported (there is no absolute IR volume),
+   * so this only records them. If a client starts sending absolute writes
+   * instead of VolumeSelector, it shows up here rather than nowhere.
+   */
+  async setVolume(value: CharacteristicValue) {
+    this.trace(`HomeKit Volume <- ${value as number} (absolute writes unsupported, ignored; tracked ${this.state.volume})`);
   }
 
   /**
@@ -498,6 +589,7 @@ export class IrRemoteAccessory {
    */
   async setTargetMediaState(value: CharacteristicValue) {
     const target = value as number;
+    this.trace(`HomeKit TargetMediaState <- ${target}`);
 
     switch (target) {
       case IrRemoteAccessory.MEDIA_STATE_PLAY:
@@ -508,7 +600,7 @@ export class IrRemoteAccessory {
         await this.pause('Target media pause');
         return;
       default:
-        this.log.debug(`[${this.config.name}] Unhandled TargetMediaState: ${target}`);
+        this.trace(`TargetMediaState ${target} is unhandled — nothing sent`);
     }
   }
 
@@ -545,6 +637,9 @@ export class IrRemoteAccessory {
    */
   async setVolumeSelector(value: CharacteristicValue) {
     const selector = value as number;
+    const meaning = selector === 0 ? 'increment' : selector === 1 ? 'decrement' : 'unknown';
+    this.trace(`HomeKit VolumeSelector <- ${selector} (${meaning}), volume was ${this.state.volume}`);
+
     if (selector === 0) {
       this.state.volume = Math.min(100, this.state.volume + 1);
       await this.fire(IR_KEY_VOLUME_UP);
@@ -552,9 +647,11 @@ export class IrRemoteAccessory {
       this.state.volume = Math.max(0, this.state.volume - 1);
       await this.fire(IR_KEY_VOLUME_DOWN);
     } else {
+      this.trace(`VolumeSelector ${selector} is not 0/1 — nothing sent`);
       return;
     }
 
+    this.schedulePersist();
     // Keep the Home app's volume slider in sync (optimistically)
     this.speaker.updateCharacteristic(this.platform.Characteristic.Volume, this.state.volume);
   }
@@ -564,22 +661,35 @@ export class IrRemoteAccessory {
    */
   async setMute(value: CharacteristicValue) {
     const muted = value as boolean;
+    this.trace(`HomeKit Mute <- ${muted ? 'true' : 'false'}, was ${this.state.muted ? 'true' : 'false'}`);
     if (muted === this.state.muted) {
+      this.trace('Mute unchanged — MUTE not sent');
       return;
     }
     this.state.muted = muted;
-    this.log.info(`[${this.config.name}] ${muted ? 'Muted' : 'Unmuted'}`);
+    this.schedulePersist();
     await this.fire(IR_KEY_MUTE);
   }
 
   /**
-   * Fire an IR command through the cloud. Throws a HomeKit communication
-   * error so the accessory shows as unavailable if the cloud call fails.
+   * Queue an IR command behind any in-flight send, then hand it to the cloud.
+   * Throws a HomeKit communication error so the accessory shows as unavailable
+   * if the cloud call fails.
    */
   private async fire(keyName: string): Promise<void> {
+    const send = this.sendChain.then(() => this.sendIr(keyName));
+    // Keep the chain alive even when a send fails for the caller
+    this.sendChain = send.catch(() => undefined);
+    return send;
+  }
+
+  private async sendIr(keyName: string): Promise<void> {
+    const started = Date.now();
     try {
       await this.client.fireKey(this.thing, keyName);
+      this.trace(`IR sent "${keyName}" ok in ${Date.now() - started}ms`);
     } catch (error) {
+      this.trace(`IR send "${keyName}" FAILED in ${Date.now() - started}ms`);
       this.log.error(`[${this.config.name}] Fire "${keyName}" failed:`, error instanceof Error ? error.message : String(error));
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
     }
@@ -594,6 +704,10 @@ export class IrRemoteAccessory {
       clearTimeout(timer);
     }
     this.buttonTimers.length = 0;
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = undefined;
+    }
     this.log.info(`[${this.config.name}] Removed`);
   }
 }
