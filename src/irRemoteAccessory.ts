@@ -55,6 +55,14 @@ export class IrRemoteAccessory {
   private static readonly MEDIA_STATE_PAUSE = 1;
   private static readonly MEDIA_STATE_STOP = 2;
 
+  /**
+   * How long a "turn on" write is held before the POWER toggle is sent. A
+   * client can write Active=1 as a session wake immediately before the command
+   * the user actually asked for; because POWER is a plain toggle, that wake
+   * turns the device off. Anything the user touches in this window cancels it.
+   */
+  private static readonly POWER_WAKE_HOLD_MS = 1000;
+
   private readonly thing: TapoThingInfo;
   private readonly client: TapoCloudClient;
   private readonly television: Service;
@@ -71,6 +79,7 @@ export class IrRemoteAccessory {
   // reorder a VOL- against a POWER).
   private sendChain: Promise<void> = Promise.resolve();
   private persistTimer?: NodeJS.Timeout;
+  private pendingPower?: NodeJS.Timeout;
   private traceSeq = 0;
   private lastTraceAt = 0;
 
@@ -416,6 +425,7 @@ export class IrRemoteAccessory {
         return; // only react to ON presses
       }
       this.trace(`Button pressed: ${this.labelFor(key)}`);
+      this.cancelPendingPower('a button press');
       try {
         await this.fire(key.name);
       } finally {
@@ -510,7 +520,34 @@ export class IrRemoteAccessory {
       this.state.activeIdentifier = 0;
       this.television.updateCharacteristic(this.platform.Characteristic.ActiveIdentifier, 0);
     }
-    await this.fire(IR_KEY_POWER);
+
+    // "Off" is unambiguous, so it goes straight out. "On" waits, because the
+    // same write is how clients wake a TV before sending something else.
+    this.cancelPendingPower('a new Active write');
+    if (!on) {
+      await this.fire(IR_KEY_POWER);
+      return;
+    }
+    this.pendingPower = setTimeout(() => {
+      this.pendingPower = undefined;
+      this.trace('POWER hold elapsed — sending');
+      void this.fire(IR_KEY_POWER).catch(() => undefined);
+    }, IrRemoteAccessory.POWER_WAKE_HOLD_MS);
+    this.trace(`POWER held for ${IrRemoteAccessory.POWER_WAKE_HOLD_MS}ms in case this is a wake`);
+  }
+
+  /**
+   * Drop a held POWER toggle. Called by every other command handler: if the
+   * user reached a volume/mute/remote control right after the Active write,
+   * the write was a wake, not a power press.
+   */
+  private cancelPendingPower(reason: string): void {
+    if (!this.pendingPower) {
+      return;
+    }
+    clearTimeout(this.pendingPower);
+    this.pendingPower = undefined;
+    this.trace(`held POWER cancelled by ${reason} — treated as a wake, no IR sent`);
   }
 
   /**
@@ -519,6 +556,7 @@ export class IrRemoteAccessory {
   async setActiveIdentifier(value: CharacteristicValue) {
     const id = value as number;
     this.trace(`HomeKit ActiveIdentifier <- ${id}, was ${this.state.activeIdentifier}`);
+    this.cancelPendingPower('an input selection');
     if (id === this.state.activeIdentifier) {
       this.trace('ActiveIdentifier unchanged — nothing sent');
       return;
@@ -540,6 +578,7 @@ export class IrRemoteAccessory {
   async setRemoteKey(value: CharacteristicValue) {
     const remoteKey = value as number;
     this.trace(`HomeKit RemoteKey <- ${remoteKey}`);
+    this.cancelPendingPower('a remote key');
 
     switch (remoteKey) {
       case 2: // NEXT_TRACK
@@ -582,6 +621,7 @@ export class IrRemoteAccessory {
    */
   async setVolume(value: CharacteristicValue) {
     this.trace(`HomeKit Volume <- ${value as number} (absolute writes unsupported, ignored; tracked ${this.state.volume})`);
+    this.cancelPendingPower('a volume write');
   }
 
   /**
@@ -590,6 +630,7 @@ export class IrRemoteAccessory {
   async setTargetMediaState(value: CharacteristicValue) {
     const target = value as number;
     this.trace(`HomeKit TargetMediaState <- ${target}`);
+    this.cancelPendingPower('a media state change');
 
     switch (target) {
       case IrRemoteAccessory.MEDIA_STATE_PLAY:
@@ -639,6 +680,7 @@ export class IrRemoteAccessory {
     const selector = value as number;
     const meaning = selector === 0 ? 'increment' : selector === 1 ? 'decrement' : 'unknown';
     this.trace(`HomeKit VolumeSelector <- ${selector} (${meaning}), volume was ${this.state.volume}`);
+    this.cancelPendingPower('a volume change');
 
     if (selector === 0) {
       this.state.volume = Math.min(100, this.state.volume + 1);
@@ -662,6 +704,7 @@ export class IrRemoteAccessory {
   async setMute(value: CharacteristicValue) {
     const muted = value as boolean;
     this.trace(`HomeKit Mute <- ${muted ? 'true' : 'false'}, was ${this.state.muted ? 'true' : 'false'}`);
+    this.cancelPendingPower('a mute change');
     if (muted === this.state.muted) {
       this.trace('Mute unchanged — MUTE not sent');
       return;
@@ -707,6 +750,10 @@ export class IrRemoteAccessory {
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
       this.persistTimer = undefined;
+    }
+    if (this.pendingPower) {
+      clearTimeout(this.pendingPower);
+      this.pendingPower = undefined;
     }
     this.log.info(`[${this.config.name}] Removed`);
   }
